@@ -39,6 +39,7 @@ services:
     ports:
       - "5432:5432"
   fineract-server:
+    build: Dockerfile
     image: fineract:latest
     volumes:
       - ./fineract-provider/build/data:/data
