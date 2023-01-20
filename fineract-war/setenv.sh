@@ -20,10 +20,14 @@
 # NOTE: drop this file into your Tomcat bin folder and use it to tweak your configuration in a WAR deployment
 export FINERACT_NODE_ID="1"
 # NOTE: env vars prefixed "FINERACT_HIKARI_*" are used to configure the database connection pool
-export FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME="org.mariadb.jdbc.Driver"
-export FINERACT_HIKARI_JDBC_URL="jdbc:mariadb://fineractmysql:3306/fineract_tenants"
-export FINERACT_HIKARI_USERNAME="root"
-export FINERACT_HIKARI_PASSWORD="skdcnwauicn2ucnaecasdsajdnizucawencascdca"
+#export FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME="org.mariadb.jdbc.Driver"
+export FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME="org.postgresql.Driver"
+#export FINERACT_HIKARI_JDBC_URL="jdbc:mariadb://fineractmysql:3306/fineract_tenants"
+export FINERACT_HIKARI_JDBC_URL="jdbc:postgresql://fineractpostgresql:5432/fineract_tenants"
+#export FINERACT_HIKARI_USERNAME="root"
+export FINERACT_HIKARI_USERNAME="postgres"
+#export FINERACT_HIKARI_PASSWORD="skdcnwauicn2ucnaecasdsajdnizucawencascdca"
+export FINERACT_HIKARI_PASSWORD="postgres"
 # ... following variables are optional; "application.properties" contains reasonable defaults (same as here)
 export FINERACT_HIKARI_MINIMUM_IDLE="3"
 export FINERACT_HIKARI_MAXIMUM_POOL_SIZE="10"
