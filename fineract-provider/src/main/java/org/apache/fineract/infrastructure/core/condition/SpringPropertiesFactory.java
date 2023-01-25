@@ -44,11 +44,6 @@ public abstract class SpringPropertiesFactory {
     }
 
     public static <T> T get(Environment environment, String propertyName, Class<T> clazz) {
-        System.out.println("==============================================");
-        System.out.println(propertyName);
-        System.out.println(clazz);
-        System.out.println("==============================================");
-
         return Binder.get(environment).bind(propertyName, clazz).orElseThrow(
                 () -> new IllegalArgumentException("Couldn't bind " + clazz.getSimpleName() + " to the '" + propertyName + "' property"));
     }

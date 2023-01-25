@@ -1208,10 +1208,6 @@
             <column name="appuser_id" valueNumeric="1"/>
             <column name="role_id" valueNumeric="1"/>
         </insert>
-        <insert tableName="m_appuser_role">
-            <column name="appuser_id" valueNumeric="3"/>
-            <column name="role_id" valueNumeric="1"/>
-        </insert>
     </changeSet>
     <changeSet author="fineract" id="10">
         <insert tableName="m_code">
