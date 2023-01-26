@@ -156,11 +156,10 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
 
     @Transactional
     @Override
-    public LoanTransaction makeRepayment(final LoanTransactionType repaymentTransactionType, final Loan loan,
-            final LocalDate transactionDate, final BigDecimal transactionAmount, final PaymentDetail paymentDetail, final String noteText,
-            final ExternalId txnExternalId, final boolean isRecoveryRepayment, final String chargeRefundChargeType,
-            boolean isAccountTransfer, HolidayDetailDTO holidayDetailDto, Boolean isHolidayValidationDone,
-            final boolean isLoanToLoanTransfer) {
+    public LoanTransaction makeRepayment(final LoanTransactionType repaymentTransactionType, Loan loan, final LocalDate transactionDate,
+            final BigDecimal transactionAmount, final PaymentDetail paymentDetail, final String noteText, final ExternalId txnExternalId,
+            final boolean isRecoveryRepayment, final String chargeRefundChargeType, boolean isAccountTransfer,
+            HolidayDetailDTO holidayDetailDto, Boolean isHolidayValidationDone, final boolean isLoanToLoanTransfer) {
         checkClientOrGroupActive(loan);
 
         LoanBusinessEvent repaymentEvent = getLoanRepaymentTypeBusinessEvent(repaymentTransactionType, isRecoveryRepayment, loan);
@@ -206,13 +205,10 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
          * time being, not a major issue for now as this loop is entered only in edge cases (when a payment is made
          * before the latest payment recorded against the loan)
          ***/
-
-        saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
-
         if (changedTransactionDetail != null) {
             for (Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
 
-                saveLoanTransactionWithDataIntegrityViolationChecks(mapEntry.getValue());
+                loanTransactionRepository.save(mapEntry.getValue());
                 // update loan with references to the newly created transactions
                 loan.addLoanTransaction(mapEntry.getValue());
                 updateLoanTransaction(mapEntry.getKey(), mapEntry.getValue());
@@ -220,6 +216,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             // Trigger transaction replayed event
             replayedTransactionBusinessEventService.raiseTransactionReplayedEvents(changedTransactionDetail);
         }
+        loan = saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
 
         if (StringUtils.isNotBlank(noteText)) {
             final Note note = Note.loanTransactionNote(loan, newRepaymentTransaction, noteText);
@@ -314,9 +311,9 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     }
 
     @Override
-    public void saveLoanTransactionWithDataIntegrityViolationChecks(LoanTransaction newRepaymentTransaction) {
+    public LoanTransaction saveLoanTransactionWithDataIntegrityViolationChecks(LoanTransaction newRepaymentTransaction) {
         try {
-            this.loanTransactionRepository.saveAndFlush(newRepaymentTransaction);
+            return this.loanTransactionRepository.saveAndFlush(newRepaymentTransaction);
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             raiseValidationExceptionForUniqueConstraintViolation(e);
             throw e;
@@ -324,9 +321,9 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     }
 
     @Override
-    public void saveAndFlushLoanWithDataIntegrityViolationChecks(final Loan loan) {
+    public Loan saveAndFlushLoanWithDataIntegrityViolationChecks(final Loan loan) {
         try {
-            this.loanRepositoryWrapper.saveAndFlush(loan);
+            return this.loanRepositoryWrapper.saveAndFlush(loan);
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             raiseValidationExceptionForUniqueConstraintViolation(e);
             throw e;
@@ -334,9 +331,9 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     }
 
     @Override
-    public void saveLoanWithDataIntegrityViolationChecks(final Loan loan) {
+    public Loan saveLoanWithDataIntegrityViolationChecks(final Loan loan) {
         try {
-            this.loanRepositoryWrapper.save(loan);
+            return this.loanRepositoryWrapper.save(loan);
         } catch (final JpaSystemException | DataIntegrityViolationException e) {
             raiseValidationExceptionForUniqueConstraintViolation(e);
             throw e;
@@ -547,59 +544,50 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     @Override
     public void recalculateAccruals(Loan loan, boolean isInterestCalculationHappened) {
         LocalDate accruedTill = loan.getAccruedTill();
-        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
-        if (loan.isPeriodicAccrualAccountingEnabledOnLoanProduct() // Loan Product with Accrual Accounting
-                && isInterestCalculationHappened // Loan Product with Interest Recalculation enabled
-                // Loan Account accrued till is not equal to the Business Date
-                && (accruedTill == null || !accruedTill.equals(businessDate)) && !loan.isNpa() // Loan Account is not
-                                                                                               // NPA
-        ) {
-            // Loan Account is Active OR is Recently Closed with Obligations Met
-            if (loan.getStatus().isActive() || (loan.getStatus().isClosedObligationsMet() && loan.getClosedOnDate().equals(businessDate))) {
-                if (accruedTill == null) {
-                    accruedTill = businessDate;
-                }
+        if (!loan.isPeriodicAccrualAccountingEnabledOnLoanProduct() || !isInterestCalculationHappened || accruedTill == null || loan.isNpa()
+                || !loan.getStatus().isActive()) {
+            return;
+        }
 
-                boolean isOrganisationDateEnabled = this.configurationDomainService.isOrganisationstartDateEnabled();
-                LocalDate organisationStartDate = businessDate;
-                if (isOrganisationDateEnabled) {
-                    organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
-                }
-                Collection<LoanScheduleAccrualData> loanScheduleAccrualList = new ArrayList<>();
-                List<LoanRepaymentScheduleInstallment> installments = loan.getRepaymentScheduleInstallments();
-                Long loanId = loan.getId();
-                Long officeId = loan.getOfficeId();
-                LocalDate accrualStartDate = null;
-                PeriodFrequencyType repaymentFrequency = loan.repaymentScheduleDetail().getRepaymentPeriodFrequencyType();
-                Integer repayEvery = loan.repaymentScheduleDetail().getRepayEvery();
-                LocalDate interestCalculatedFrom = loan.getInterestChargedFromDate();
-                Long loanProductId = loan.productId();
-                MonetaryCurrency currency = loan.getCurrency();
-                ApplicationCurrency applicationCurrency = this.applicationCurrencyRepository.findOneWithNotFoundDetection(currency);
-                CurrencyData currencyData = applicationCurrency.toData();
-                Set<LoanCharge> loanCharges = loan.getActiveCharges();
+        boolean isOrganisationDateEnabled = this.configurationDomainService.isOrganisationstartDateEnabled();
+        LocalDate organisationStartDate = DateUtils.getBusinessLocalDate();
+        if (isOrganisationDateEnabled) {
+            organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
+        }
+        Collection<LoanScheduleAccrualData> loanScheduleAccrualList = new ArrayList<>();
+        List<LoanRepaymentScheduleInstallment> installments = loan.getRepaymentScheduleInstallments();
+        Long loanId = loan.getId();
+        Long officeId = loan.getOfficeId();
+        LocalDate accrualStartDate = null;
+        PeriodFrequencyType repaymentFrequency = loan.repaymentScheduleDetail().getRepaymentPeriodFrequencyType();
+        Integer repayEvery = loan.repaymentScheduleDetail().getRepayEvery();
+        LocalDate interestCalculatedFrom = loan.getInterestChargedFromDate();
+        Long loanProductId = loan.productId();
+        MonetaryCurrency currency = loan.getCurrency();
+        ApplicationCurrency applicationCurrency = this.applicationCurrencyRepository.findOneWithNotFoundDetection(currency);
+        CurrencyData currencyData = applicationCurrency.toData();
+        Set<LoanCharge> loanCharges = loan.getActiveCharges();
 
-                for (LoanRepaymentScheduleInstallment installment : installments) {
-                    if (installment.getDueDate().isAfter(loan.getMaturityDate())) {
-                        accruedTill = businessDate;
-                    }
-                    if (!isOrganisationDateEnabled || organisationStartDate.isBefore(installment.getDueDate())) {
-                        generateLoanScheduleAccrualData(accruedTill, loanScheduleAccrualList, loanId, officeId, accrualStartDate,
-                                repaymentFrequency, repayEvery, interestCalculatedFrom, loanProductId, currency, currencyData, loanCharges,
-                                installment);
-                    }
-                }
-
-                if (!loanScheduleAccrualList.isEmpty()) {
-                    try {
-                        this.loanAccrualPlatformService.addPeriodicAccruals(accruedTill, loanScheduleAccrualList);
-                    } catch (MultiException e) {
-                        String globalisationMessageCode = "error.msg.accrual.exception";
-                        throw new GeneralPlatformDomainRuleException(globalisationMessageCode, e.getMessage(), e);
-                    }
-                }
+        for (LoanRepaymentScheduleInstallment installment : installments) {
+            if (installment.getDueDate().isAfter(loan.getMaturityDate())) {
+                accruedTill = DateUtils.getBusinessLocalDate();
+            }
+            if (!isOrganisationDateEnabled || organisationStartDate.isBefore(installment.getDueDate())) {
+                generateLoanScheduleAccrualData(accruedTill, loanScheduleAccrualList, loanId, officeId, accrualStartDate,
+                        repaymentFrequency, repayEvery, interestCalculatedFrom, loanProductId, currency, currencyData, loanCharges,
+                        installment);
             }
         }
+
+        if (!loanScheduleAccrualList.isEmpty()) {
+            try {
+                this.loanAccrualPlatformService.addPeriodicAccruals(accruedTill, loanScheduleAccrualList);
+            } catch (MultiException e) {
+                String globalisationMessageCode = "error.msg.accrual.exception";
+                throw new GeneralPlatformDomainRuleException(globalisationMessageCode, e.getMessage(), e);
+            }
+        }
+
     }
 
     private void generateLoanScheduleAccrualData(final LocalDate accruedTill,
@@ -795,7 +783,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
 
         if (changedTransactionDetail != null) {
             for (Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
-                saveLoanTransactionWithDataIntegrityViolationChecks(mapEntry.getValue());
+                loanTransactionRepository.save(mapEntry.getValue());
                 // update loan with references to the newly created transactions
                 loan.getLoanTransactions().add(mapEntry.getValue());
                 updateLoanTransaction(mapEntry.getKey(), mapEntry.getValue());
