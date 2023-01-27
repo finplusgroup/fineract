@@ -39,9 +39,9 @@ public class LoanApplicationTestBuilder {
     private static final String EQUAL_INSTALLMENTS = "1";
     private static final String CALCULATION_PERIOD_SAME_AS_REPAYMENT_PERIOD = "1";
     private static final String LOCALE = "en_GB";
-    public static final String DEFAULT_STRATEGY = "1";
-    public static final String RBI_INDIA_STRATEGY = "4";
-    public static final String INTEREST_PRINCIPAL_PENALTIES_FEES_ORDER_STRATEGY = "6";
+    public static final String DEFAULT_STRATEGY = "mifos-standard-strategy";
+    public static final String RBI_INDIA_STRATEGY = "rbi-india-strategy";
+    public static final String INTEREST_PRINCIPAL_PENALTIES_FEES_ORDER_STRATEGY = "interest-principal-penalties-fees-order-strategy";
 
     private String externalId = null;
     private String principal = "10,000";
@@ -56,7 +56,7 @@ public class LoanApplicationTestBuilder {
     private String interestType = FLAT_BALANCE;
     private String amortizationType = EQUAL_PRINCIPAL_PAYMENTS;
     private String interestCalculationPeriodType = CALCULATION_PERIOD_SAME_AS_REPAYMENT_PERIOD;
-    private String transactionProcessingID = DEFAULT_STRATEGY;
+    private String transactionProcessingCode = DEFAULT_STRATEGY;
     private String expectedDisbursmentDate = "";
     private String submittedOnDate = "";
     private String loanType = "individual";
@@ -79,6 +79,8 @@ public class LoanApplicationTestBuilder {
     private List<Map<String, Object>> approvalFormData = null;
     private String fixedPrincipalPercentagePerInstallment;
     private String interestChargedFromDate;
+    private String linkAccountId;
+    private String inArrearsTolerance;
 
     public String build(final String clientID, final String groupID, final String loanProductId, final String savingsID) {
         final HashMap<String, Object> map = new HashMap<>();
@@ -147,7 +149,7 @@ public class LoanApplicationTestBuilder {
         map.put("fixedPrincipalPercentagePerInstallment", fixedPrincipalPercentagePerInstallment);
         map.put("interestType", this.interestType);
         map.put("interestCalculationPeriodType", this.interestCalculationPeriodType);
-        map.put("transactionProcessingStrategyId", this.transactionProcessingID);
+        map.put("transactionProcessingStrategyCode", this.transactionProcessingCode);
         map.put("expectedDisbursementDate", this.expectedDisbursmentDate);
         map.put("submittedOnDate", this.submittedOnDate);
         map.put("loanType", this.loanType);
@@ -167,6 +169,14 @@ public class LoanApplicationTestBuilder {
 
         if (savingsID != null) {
             map.put("linkAccountId", savingsID);
+        }
+
+        if (this.linkAccountId != null) {
+            map.put("linkAccountId", this.linkAccountId);
+        }
+
+        if (this.inArrearsTolerance != null) {
+            map.put("inArrearsTolerance", this.inArrearsTolerance);
         }
 
         if (graceOnPrincipalPayment != null) {
@@ -207,6 +217,11 @@ public class LoanApplicationTestBuilder {
 
     public LoanApplicationTestBuilder withLoanTermFrequencyAsDays() {
         this.loanTermFrequencyType = DAYS;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withLinkedAccount(String linkAccountId) {
+        this.linkAccountId = linkAccountId;
         return this;
     }
 
@@ -335,8 +350,8 @@ public class LoanApplicationTestBuilder {
         return this;
     }
 
-    public LoanApplicationTestBuilder withwithRepaymentStrategy(final String transactionProcessingStrategy) {
-        this.transactionProcessingID = transactionProcessingStrategy;
+    public LoanApplicationTestBuilder withRepaymentStrategy(final String transactionProcessingStrategyCode) {
+        this.transactionProcessingCode = transactionProcessingStrategyCode;
         return this;
     }
 
@@ -396,6 +411,11 @@ public class LoanApplicationTestBuilder {
 
     public LoanApplicationTestBuilder withinterestChargedFromDate(String interestChargedFromDate) {
         this.interestChargedFromDate = interestChargedFromDate;
+        return this;
+    }
+
+    public LoanApplicationTestBuilder withInArrearsTolerance(String amount) {
+        this.inArrearsTolerance = amount;
         return this;
     }
 }

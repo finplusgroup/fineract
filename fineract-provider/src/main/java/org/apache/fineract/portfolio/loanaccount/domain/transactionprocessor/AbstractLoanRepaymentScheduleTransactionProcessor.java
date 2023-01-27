@@ -30,12 +30,16 @@ import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.loanaccount.data.LoanChargePaidDetail;
 import org.apache.fineract.portfolio.loanaccount.domain.ChangedTransactionDetail;
+import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanCharge;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanChargePaidBy;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanInstallmentCharge;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanInterestRecalcualtionAdditionalDetails;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleProcessingWrapper;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRelation;
+import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionRelationTypeEnum;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionToRepaymentScheduleMapping;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransactionType;
 import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.impl.CreocoreLoanRepaymentScheduleTransactionProcessor;
@@ -52,6 +56,11 @@ import org.apache.fineract.portfolio.loanaccount.domain.transactionprocessor.imp
  * @see CreocoreLoanRepaymentScheduleTransactionProcessor
  */
 public abstract class AbstractLoanRepaymentScheduleTransactionProcessor implements LoanRepaymentScheduleTransactionProcessor {
+
+    @Override
+    public boolean accept(String s) {
+        return getCode().equalsIgnoreCase(s) || getName().equalsIgnoreCase(s);
+    }
 
     /**
      * Provides support for passing all {@link LoanTransaction}'s so it will completely re-process the entire loan
@@ -100,7 +109,10 @@ public abstract class AbstractLoanRepaymentScheduleTransactionProcessor implemen
                 LocalDate startDate = disbursementDate;
                 for (final LoanRepaymentScheduleInstallment installment : installments) {
                     for (final LoanCharge loanCharge : transferCharges) {
-                        if (loanCharge.isDueForCollectionFromAndUpToAndIncluding(startDate, installment.getDueDate())) {
+                        if (loanCharge.isDueForCollectionFromAndUpToAndIncluding(startDate, installment.getDueDate())
+                                // Special case for Loan Charges (Due Date) added the same disbursement date
+                                || (startDate.equals(disbursementDate) && loanCharge.getDueDate() != null
+                                        && loanCharge.getDueDate().equals(disbursementDate))) {
                             Money amountForProcess = loanCharge.getAmount(currency);
                             if (amountForProcess.isGreaterThan(loanTransaction.getAmount(currency))) {
                                 amountForProcess = loanTransaction.getAmount(currency);
@@ -140,7 +152,7 @@ public abstract class AbstractLoanRepaymentScheduleTransactionProcessor implemen
         }
 
         for (final LoanTransaction loanTransaction : transactionstoBeProcessed) {
-
+            // TODO: analyze and remove this
             if (!loanTransaction.getTypeOf().equals(LoanTransactionType.REFUND_FOR_ACTIVE_LOAN)) {
                 final Comparator<LoanRepaymentScheduleInstallment> byDate = new Comparator<LoanRepaymentScheduleInstallment>() {
 
@@ -178,6 +190,10 @@ public abstract class AbstractLoanRepaymentScheduleTransactionProcessor implemen
                     } else {
                         loanTransaction.reverse();
                         loanTransaction.updateExternalId(null);
+                        newLoanTransaction.copyLoanTransactionRelations(loanTransaction.getLoanTransactionRelations());
+                        // Adding Replayed relation from newly created transaction to reversed transaction
+                        newLoanTransaction.getLoanTransactionRelations().add(LoanTransactionRelation.linkToTransaction(newLoanTransaction,
+                                loanTransaction, LoanTransactionRelationTypeEnum.REPLAYED));
                         changedTransactionDetail.getNewTransactionMappings().put(loanTransaction.getId(), newLoanTransaction);
                     }
                 }
@@ -503,6 +519,71 @@ public abstract class AbstractLoanRepaymentScheduleTransactionProcessor implemen
     @Override
     public boolean isInterestFirstRepaymentScheduleTransactionProcessor() {
         return false;
+    }
+
+    @Override
+    public void handleChargeback(LoanTransaction loanTransaction, MonetaryCurrency currency, Money overpaidAmount,
+            List<LoanRepaymentScheduleInstallment> installments) {
+        List<LoanTransactionToRepaymentScheduleMapping> transactionMappings = new ArrayList<>();
+        final Comparator<LoanRepaymentScheduleInstallment> byDate = new Comparator<LoanRepaymentScheduleInstallment>() {
+
+            @Override
+            public int compare(LoanRepaymentScheduleInstallment ord1, LoanRepaymentScheduleInstallment ord2) {
+                return ord1.getDueDate().compareTo(ord2.getDueDate());
+            }
+        };
+        Collections.sort(installments, byDate);
+        final Money zeroMoney = Money.zero(currency);
+        Money transactionAmountUnprocessed = loanTransaction.getAmount(currency);
+        if (overpaidAmount.isGreaterThanZero()) {
+            transactionAmountUnprocessed = loanTransaction.getAmount(currency).minus(overpaidAmount);
+            if (transactionAmountUnprocessed.isLessThanZero()) {
+                transactionAmountUnprocessed = zeroMoney;
+            }
+        }
+
+        if (transactionAmountUnprocessed.isGreaterThanZero()) {
+            final LocalDate transactionDate = loanTransaction.getTransactionDate();
+            boolean loanTransactionMapped = false;
+            LocalDate pastDueDate = null;
+            for (final LoanRepaymentScheduleInstallment currentInstallment : installments) {
+                pastDueDate = currentInstallment.getDueDate();
+                if (!currentInstallment.isAdditional() && currentInstallment.getDueDate().isAfter(transactionDate)) {
+                    currentInstallment.addToCredits(transactionAmountUnprocessed.getAmount());
+                    currentInstallment.addToPrincipal(transactionDate, transactionAmountUnprocessed);
+                    transactionMappings.add(LoanTransactionToRepaymentScheduleMapping.createFrom(loanTransaction, currentInstallment,
+                            transactionAmountUnprocessed, zeroMoney, zeroMoney, zeroMoney));
+
+                    loanTransactionMapped = true;
+
+                    break;
+
+                    // If already exists an additional installment just update the due date and
+                    // principal from the Loan charge back transaction
+                } else if (currentInstallment.isAdditional()) {
+                    currentInstallment.updateDueChargeback(transactionDate, transactionAmountUnprocessed);
+                    loanTransactionMapped = true;
+                    break;
+                }
+            }
+
+            // New installment will be added (N+1 scenario)
+            if (!loanTransactionMapped) {
+                Loan loan = loanTransaction.getLoan();
+                final Set<LoanInterestRecalcualtionAdditionalDetails> compoundingDetails = null;
+                LoanRepaymentScheduleInstallment installment = new LoanRepaymentScheduleInstallment(loan, (installments.size() + 1),
+                        pastDueDate, transactionDate, transactionAmountUnprocessed.getAmount(), zeroMoney.getAmount(),
+                        zeroMoney.getAmount(), zeroMoney.getAmount(), false, compoundingDetails);
+                installment.markAsAdditional();
+                installment.addToCredits(transactionAmountUnprocessed.getAmount());
+                loan.addLoanRepaymentScheduleInstallment(installment);
+
+                transactionMappings.add(LoanTransactionToRepaymentScheduleMapping.createFrom(loanTransaction, installment,
+                        transactionAmountUnprocessed, zeroMoney, zeroMoney, zeroMoney));
+            }
+
+            loanTransaction.updateLoanTransactionToRepaymentScheduleMappings(transactionMappings);
+        }
     }
 
     @Override

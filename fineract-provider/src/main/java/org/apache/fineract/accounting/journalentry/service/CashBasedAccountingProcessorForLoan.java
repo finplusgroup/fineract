@@ -21,11 +21,15 @@ package org.apache.fineract.accounting.journalentry.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.accounting.closure.domain.GLClosure;
+import org.apache.fineract.accounting.common.AccountingConstants;
 import org.apache.fineract.accounting.common.AccountingConstants.CashAccountsForLoan;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
+import org.apache.fineract.accounting.glaccount.domain.GLAccount;
 import org.apache.fineract.accounting.journalentry.data.ChargePaymentDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanDTO;
 import org.apache.fineract.accounting.journalentry.data.LoanTransactionDTO;
@@ -41,8 +45,6 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
     @Override
     public void createJournalEntriesForLoan(final LoanDTO loanDTO) {
         final GLClosure latestGLClosure = this.helper.getLatestClosureByBranch(loanDTO.getOfficeId());
-        // final Office office =
-        // this.helper.getOfficeById(loanDTO.getOfficeId());
         final Long loanProductId = loanDTO.getLoanProductId();
         final String currencyCode = loanDTO.getCurrencyCode();
         for (final LoanTransactionDTO loanTransactionDTO : loanDTO.getNewLoanTransactions()) {
@@ -60,9 +62,10 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
             }
             /***
              * Logic for repayments, repayments at disbursement and reversal of Repayments and Repayments at
-             * disbursement
+             * disbursement (except charge adjustment)
              ***/
-            else if (loanTransactionDTO.getTransactionType().isRepaymentType()
+            else if ((loanTransactionDTO.getTransactionType().isRepaymentType()
+                    && !loanTransactionDTO.getTransactionType().isChargeAdjustment())
                     || loanTransactionDTO.getTransactionType().isRepaymentAtDisbursement()
                     || loanTransactionDTO.getTransactionType().isChargePayment()) {
                 createJournalEntriesForRepayments(loanDTO, loanTransactionDTO, office);
@@ -90,7 +93,7 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
             else if (loanTransactionDTO.getTransactionType().isWriteOff()) {
                 final BigDecimal principalAmount = loanTransactionDTO.getPrincipal();
                 if (principalAmount != null && !(principalAmount.compareTo(BigDecimal.ZERO) == 0)) {
-                    this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
+                    this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode,
                             CashAccountsForLoan.LOSSES_WRITTEN_OFF.getValue(), CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), loanProductId,
                             paymentTypeId, loanId, transactionId, transactionDate, principalAmount, loanTransactionDTO.isReversed());
 
@@ -104,7 +107,139 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
             else if (loanTransactionDTO.getTransactionType().isRefundForActiveLoans()) {
                 createJournalEntriesForRefundForActiveLoan(loanDTO, loanTransactionDTO, office);
             }
+            // Logic for Chargebacks
+            else if (loanTransactionDTO.getTransactionType().isChargeback()) {
+                createJournalEntriesForChargeback(loanDTO, loanTransactionDTO, office);
+            }
+            // Logic for Charge Adjustment
+            else if (loanTransactionDTO.getTransactionType().isChargeAdjustment()) {
+                createJournalEntriesForChargeAdjustment(loanDTO, loanTransactionDTO, office);
+            }
         }
+    }
+
+    private void createJournalEntriesForChargeAdjustment(LoanDTO loanDTO, LoanTransactionDTO loanTransactionDTO, Office office) {
+        // loan properties
+        final Long loanProductId = loanDTO.getLoanProductId();
+        final Long loanId = loanDTO.getLoanId();
+        final String currencyCode = loanDTO.getCurrencyCode();
+
+        // transaction properties
+        final String transactionId = loanTransactionDTO.getTransactionId();
+        final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
+        final BigDecimal principalAmount = loanTransactionDTO.getPrincipal();
+        final BigDecimal interestAmount = loanTransactionDTO.getInterest();
+        final BigDecimal feesAmount = loanTransactionDTO.getFees();
+        final BigDecimal penaltiesAmount = loanTransactionDTO.getPenalties();
+        final BigDecimal overPaymentAmount = loanTransactionDTO.getOverPayment();
+        final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
+        final boolean isReversal = loanTransactionDTO.isReversed();
+
+        BigDecimal totalDebitAmount = new BigDecimal(0);
+
+        Map<GLAccount, BigDecimal> accountMap = new HashMap<>();
+
+        // handle principal payment (and reversals)
+        if (principalAmount != null && !(principalAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            totalDebitAmount = totalDebitAmount.add(principalAmount);
+            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                    AccountingConstants.CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), paymentTypeId);
+            accountMap.put(account, principalAmount);
+        }
+
+        // handle interest payment (and reversals)
+        if (interestAmount != null && !(interestAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            totalDebitAmount = totalDebitAmount.add(interestAmount);
+            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                    AccountingConstants.CashAccountsForLoan.INTEREST_ON_LOANS.getValue(), paymentTypeId);
+            if (accountMap.containsKey(account)) {
+                BigDecimal amount = accountMap.get(account).add(interestAmount);
+                accountMap.put(account, amount);
+            } else {
+                accountMap.put(account, interestAmount);
+            }
+        }
+
+        // handle fees payment (and reversals)
+        if (feesAmount != null && !(feesAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            totalDebitAmount = totalDebitAmount.add(feesAmount);
+            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                    AccountingConstants.CashAccountsForLoan.INCOME_FROM_FEES.getValue(), paymentTypeId);
+            if (accountMap.containsKey(account)) {
+                BigDecimal amount = accountMap.get(account).add(feesAmount);
+                accountMap.put(account, amount);
+            } else {
+                accountMap.put(account, feesAmount);
+            }
+        }
+
+        // handle penalties payment (and reversals)
+        if (penaltiesAmount != null && !(penaltiesAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            totalDebitAmount = totalDebitAmount.add(penaltiesAmount);
+            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                    CashAccountsForLoan.INCOME_FROM_PENALTIES.getValue(), paymentTypeId);
+            if (accountMap.containsKey(account)) {
+                BigDecimal amount = accountMap.get(account).add(penaltiesAmount);
+                accountMap.put(account, amount);
+            } else {
+                accountMap.put(account, penaltiesAmount);
+            }
+        }
+
+        // handle overpayment
+        if (overPaymentAmount != null && !(overPaymentAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            totalDebitAmount = totalDebitAmount.add(overPaymentAmount);
+            GLAccount account = this.helper.getLinkedGLAccountForLoanProduct(loanProductId,
+                    AccountingConstants.CashAccountsForLoan.OVERPAYMENT.getValue(), paymentTypeId);
+            if (accountMap.containsKey(account)) {
+                BigDecimal amount = accountMap.get(account).add(overPaymentAmount);
+                accountMap.put(account, amount);
+            } else {
+                accountMap.put(account, overPaymentAmount);
+            }
+        }
+
+        for (Map.Entry<GLAccount, BigDecimal> entry : accountMap.entrySet()) {
+            this.helper.createCreditJournalEntryOrReversalForLoan(office, currencyCode, loanId, transactionId, transactionDate,
+                    entry.getValue(), isReversal, entry.getKey());
+        }
+
+        if (!(totalDebitAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            Long chargeId = loanTransactionDTO.getLoanChargeData().getChargeId();
+            Integer accountMappingTypeId;
+            if (loanTransactionDTO.getLoanChargeData().isPenalty()) {
+                accountMappingTypeId = AccountingConstants.CashAccountsForLoan.INCOME_FROM_PENALTIES.getValue();
+            } else {
+                accountMappingTypeId = AccountingConstants.CashAccountsForLoan.INCOME_FROM_FEES.getValue();
+            }
+            this.helper.createDebitJournalEntryOrReversalForLoanCharges(office, currencyCode, accountMappingTypeId, loanProductId, chargeId,
+                    loanId, transactionId, transactionDate, totalDebitAmount, isReversal);
+        }
+    }
+
+    /**
+     * Handle chargeback journal entry creation
+     *
+     * @param loanDTO
+     * @param loanTransactionDTO
+     * @param office
+     */
+    private void createJournalEntriesForChargeback(LoanDTO loanDTO, LoanTransactionDTO loanTransactionDTO, Office office) {
+        // loan properties
+        final Long loanProductId = loanDTO.getLoanProductId();
+        final Long loanId = loanDTO.getLoanId();
+        final String currencyCode = loanDTO.getCurrencyCode();
+
+        // transaction properties
+        final String transactionId = loanTransactionDTO.getTransactionId();
+        final LocalDate transactionDate = loanTransactionDTO.getTransactionDate();
+        final BigDecimal amount = loanTransactionDTO.getAmount();
+        final boolean isReversal = loanTransactionDTO.isReversed();
+        final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
+
+        this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
+                CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate, amount,
+                isReversal);
     }
 
     /**
@@ -131,17 +266,17 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
         final boolean isReversal = loanTransactionDTO.isReversed();
         final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
         if (loanTransactionDTO.isLoanToLoanTransfer()) {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
-                    CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), FinancialActivity.ASSET_TRANSFER.getValue(), loanProductId,
-                    paymentTypeId, loanId, transactionId, transactionDate, disbursalAmount, isReversal);
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
+                    FinancialActivity.ASSET_TRANSFER.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
+                    disbursalAmount, isReversal);
         } else if (loanTransactionDTO.isAccountTransfer()) {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
-                    CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), FinancialActivity.LIABILITY_TRANSFER.getValue(), loanProductId,
-                    paymentTypeId, loanId, transactionId, transactionDate, disbursalAmount, isReversal);
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
+                    FinancialActivity.LIABILITY_TRANSFER.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
+                    disbursalAmount, isReversal);
         } else {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
-                    CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId,
-                    loanId, transactionId, transactionDate, disbursalAmount, isReversal);
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
+                    CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
+                    disbursalAmount, isReversal);
         }
 
     }
@@ -170,11 +305,11 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
         final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
 
         if (loanTransactionDTO.isAccountTransfer()) {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.OVERPAYMENT.getValue(),
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.OVERPAYMENT.getValue(),
                     FinancialActivity.LIABILITY_TRANSFER.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
                     refundAmount, isReversal);
         } else {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.OVERPAYMENT.getValue(),
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.OVERPAYMENT.getValue(),
                     CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
                     refundAmount, isReversal);
         }
@@ -256,6 +391,19 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
                         loanProductId, paymentTypeId, loanId, transactionId, transactionDate, totalDebitAmount, isReversal);
             }
         }
+
+        /**
+         * Charge Refunds (and their reversals) have an extra refund related pair of journal entries in addition to
+         * those related to the repayment above
+         ***/
+        if (!(totalDebitAmount.compareTo(BigDecimal.ZERO) == 0)) {
+            if (loanTransactionDTO.getTransactionType().isChargeRefund()) {
+                Integer incomeAccount = this.helper.getValueForFeeOrPenaltyIncomeAccount(loanTransactionDTO.getChargeRefundChargeType());
+                this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, incomeAccount,
+                        CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
+                        totalDebitAmount, isReversal);
+            }
+        }
     }
 
     /**
@@ -277,7 +425,7 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
         final boolean isReversal = loanTransactionDTO.isReversed();
         final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
 
-        this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.FUND_SOURCE.getValue(),
+        this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.FUND_SOURCE.getValue(),
                 CashAccountsForLoan.INCOME_FROM_RECOVERY.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
                 amount, isReversal);
 
@@ -308,14 +456,14 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
         // final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
 
         if (loanTransactionDTO.getTransactionType().isInitiateTransfer()) {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
-                    CashAccountsForLoan.TRANSFERS_SUSPENSE.getValue(), CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), loanProductId, null,
-                    loanId, transactionId, transactionDate, principalAmount, isReversal);
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.TRANSFERS_SUSPENSE.getValue(),
+                    CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), loanProductId, null, loanId, transactionId, transactionDate,
+                    principalAmount, isReversal);
         } else if (loanTransactionDTO.getTransactionType().isApproveTransfer()
                 || loanTransactionDTO.getTransactionType().isWithdrawTransfer()) {
-            this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode,
-                    CashAccountsForLoan.LOAN_PORTFOLIO.getValue(), CashAccountsForLoan.TRANSFERS_SUSPENSE.getValue(), loanProductId, null,
-                    loanId, transactionId, transactionDate, principalAmount, isReversal);
+            this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
+                    CashAccountsForLoan.TRANSFERS_SUSPENSE.getValue(), loanProductId, null, loanId, transactionId, transactionDate,
+                    principalAmount, isReversal);
         }
     }
 
@@ -333,8 +481,8 @@ public class CashBasedAccountingProcessorForLoan implements AccountingProcessorF
         final boolean isReversal = loanTransactionDTO.isReversed();
         final Long paymentTypeId = loanTransactionDTO.getPaymentTypeId();
 
-        this.helper.createCashBasedJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.LOAN_PORTFOLIO.getValue(),
-                CashAccountsForLoan.OVERPAYMENT.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
+        this.helper.createJournalEntriesAndReversalsForLoan(office, currencyCode, CashAccountsForLoan.OVERPAYMENT.getValue(),
+                CashAccountsForLoan.FUND_SOURCE.getValue(), loanProductId, paymentTypeId, loanId, transactionId, transactionDate,
                 refundAmount, isReversal);
     }
 

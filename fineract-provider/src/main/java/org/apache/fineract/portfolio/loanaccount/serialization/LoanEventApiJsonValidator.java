@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
@@ -51,23 +52,15 @@ import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleIns
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanNotFoundException;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanRepaymentScheduleNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
+@AllArgsConstructor
 public final class LoanEventApiJsonValidator {
 
     private final FromJsonHelper fromApiJsonHelper;
     private final LoanApplicationCommandFromApiJsonHelper fromApiJsonDeserializer;
     private final LoanRepository loanRepository;
-
-    @Autowired
-    public LoanEventApiJsonValidator(final FromJsonHelper fromApiJsonHelper,
-            final LoanApplicationCommandFromApiJsonHelper fromApiJsonDeserializer, final LoanRepository loanRepository) {
-        this.fromApiJsonHelper = fromApiJsonHelper;
-        this.fromApiJsonDeserializer = fromApiJsonDeserializer;
-        this.loanRepository = loanRepository;
-    }
 
     private void throwExceptionIfValidationWarningsExist(final List<ApiParameterError> dataValidationErrors) {
         if (!dataValidationErrors.isEmpty()) {
@@ -195,7 +188,8 @@ public final class LoanEventApiJsonValidator {
         }
 
         final Set<String> transactionParameters = new HashSet<>(Arrays.asList("transactionDate", "transactionAmount", "externalId", "note",
-                "locale", "dateFormat", "paymentTypeId", "accountNumber", "checkNumber", "routingCode", "receiptNumber", "bankNumber"));
+                "locale", "dateFormat", "paymentTypeId", "accountNumber", "checkNumber", "routingCode", "receiptNumber", "bankNumber",
+                LoanApiConstants.REVERSAL_EXTERNAL_ID_PARAMNAME));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, transactionParameters);
@@ -213,7 +207,42 @@ public final class LoanEventApiJsonValidator {
         final String note = this.fromApiJsonHelper.extractStringNamed("note", element);
         baseDataValidator.reset().parameter("note").value(note).notExceedingLengthOf(1000);
 
-        validatePaymentDetails(baseDataValidator, element);
+        final String reversalExternalId = this.fromApiJsonHelper.extractStringNamed(LoanApiConstants.REVERSAL_EXTERNAL_ID_PARAMNAME,
+                element);
+        baseDataValidator.reset().parameter(LoanApiConstants.REVERSAL_EXTERNAL_ID_PARAMNAME).ignoreIfNull().value(reversalExternalId)
+                .notExceedingLengthOf(100);
+
+        validatePaymentDetails(baseDataValidator, element, false);
+        throwExceptionIfValidationWarningsExist(dataValidationErrors);
+    }
+
+    public void validateChargebackTransaction(final String json) {
+
+        if (StringUtils.isBlank(json)) {
+            throw new InvalidJsonException();
+        }
+
+        final Set<String> transactionParameters = new HashSet<>(Arrays.asList(LoanApiConstants.TRANSACTION_AMOUNT_PARAMNAME,
+                LoanApiConstants.localeParameterName, LoanApiConstants.externalIdParameterName, LoanApiConstants.noteParameterName,
+                LoanApiConstants.PAYMENT_TYPE_PARAMNAME));
+
+        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
+        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, transactionParameters);
+
+        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("loan.transaction");
+
+        final JsonElement element = this.fromApiJsonHelper.parse(json);
+
+        final BigDecimal transactionAmount = this.fromApiJsonHelper
+                .extractBigDecimalWithLocaleNamed(LoanApiConstants.TRANSACTION_AMOUNT_PARAMNAME, element);
+        baseDataValidator.reset().parameter(LoanApiConstants.TRANSACTION_AMOUNT_PARAMNAME).value(transactionAmount).notNull()
+                .positiveAmount();
+
+        final String note = this.fromApiJsonHelper.extractStringNamed(LoanApiConstants.noteParameterName, element);
+        baseDataValidator.reset().parameter(LoanApiConstants.noteParameterName).value(note).notExceedingLengthOf(1000);
+
+        validatePaymentDetails(baseDataValidator, element, true);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -263,9 +292,19 @@ public final class LoanEventApiJsonValidator {
     }
 
     private void validatePaymentDetails(final DataValidatorBuilder baseDataValidator, final JsonElement element) {
+        final boolean paymentDetailRequired = false; // Default value for backward compatibility
+        validatePaymentDetails(baseDataValidator, element, paymentDetailRequired);
+    }
+
+    private void validatePaymentDetails(final DataValidatorBuilder baseDataValidator, final JsonElement element,
+            final boolean paymentDetailRequired) {
         // Validate all string payment detail fields for max length
         final Integer paymentTypeId = this.fromApiJsonHelper.extractIntegerWithLocaleNamed("paymentTypeId", element);
-        baseDataValidator.reset().parameter("paymentTypeId").value(paymentTypeId).ignoreIfNull().integerGreaterThanZero();
+        if (paymentDetailRequired) {
+            baseDataValidator.reset().parameter("paymentTypeId").value(paymentTypeId).notNull().integerGreaterThanZero();
+        } else {
+            baseDataValidator.reset().parameter("paymentTypeId").value(paymentTypeId).ignoreIfNull().integerGreaterThanZero();
+        }
         final Set<String> paymentDetailParameters = new HashSet<>(
                 Arrays.asList("accountNumber", "checkNumber", "routingCode", "receiptNumber", "bankNumber"));
         for (final String paymentDetailParameterName : paymentDetailParameters) {
@@ -281,7 +320,7 @@ public final class LoanEventApiJsonValidator {
         }
 
         final Set<String> disbursementParameters = new HashSet<>(
-                Arrays.asList("transactionDate", "note", "locale", "dateFormat", "writeoffReasonId"));
+                Arrays.asList("transactionDate", "note", "locale", "dateFormat", "writeoffReasonId", "externalId"));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, disbursementParameters);
@@ -296,59 +335,38 @@ public final class LoanEventApiJsonValidator {
         final String note = this.fromApiJsonHelper.extractStringNamed("note", element);
         baseDataValidator.reset().parameter("note").value(note).notExceedingLengthOf(1000);
 
-        throwExceptionIfValidationWarningsExist(dataValidationErrors);
-    }
-
-    public void validateAddLoanCharge(final String json) {
-        if (StringUtils.isBlank(json)) {
-            throw new InvalidJsonException();
-        }
-
-        final Set<String> disbursementParameters = new HashSet<>(
-                Arrays.asList("chargeId", "amount", "dueDate", "locale", "dateFormat", "externalId"));
-
-        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, disbursementParameters);
-
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("loanCharge");
-
-        final JsonElement element = this.fromApiJsonHelper.parse(json);
-        final Long chargeId = this.fromApiJsonHelper.extractLongNamed("chargeId", element);
-        baseDataValidator.reset().parameter("chargeId").value(chargeId).notNull().integerGreaterThanZero();
-
-        final BigDecimal amount = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed("amount", element);
-        baseDataValidator.reset().parameter("amount").value(amount).notNull().positiveAmount();
-
-        if (this.fromApiJsonHelper.parameterExists("dueDate", element)) {
-            final LocalDate dueDate = this.fromApiJsonHelper.extractLocalDateNamed("dueDate", element);
-            baseDataValidator.reset().parameter("dueDate").value(dueDate).notBlank();
-        }
+        final String externalId = this.fromApiJsonHelper.extractStringNamed("externalId", element);
+        baseDataValidator.reset().parameter("externalId").value(externalId).ignoreIfNull().notExceedingLengthOf(100);
 
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
-    public void validateUpdateOfLoanCharge(final String json) {
+    public void validateChargeOffTransaction(final String json) {
         if (StringUtils.isBlank(json)) {
             throw new InvalidJsonException();
         }
 
-        final Set<String> disbursementParameters = new HashSet<>(Arrays.asList("amount", "dueDate", "locale", "dateFormat"));
+        final Set<String> chargeOffParameters = new HashSet<>(
+                Arrays.asList("transactionDate", "note", "locale", "dateFormat", "chargeOffReasonId", "externalId"));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, disbursementParameters);
+        fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, chargeOffParameters);
 
         final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("loanCharge");
+        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors).resource("loan.transaction");
 
-        final JsonElement element = this.fromApiJsonHelper.parse(json);
+        final JsonElement element = fromApiJsonHelper.parse(json);
+        final LocalDate transactionDate = fromApiJsonHelper.extractLocalDateNamed("transactionDate", element);
+        baseDataValidator.reset().parameter("transactionDate").value(transactionDate).notNull();
 
-        final BigDecimal amount = this.fromApiJsonHelper.extractBigDecimalWithLocaleNamed("amount", element);
-        baseDataValidator.reset().parameter("amount").value(amount).notNull().positiveAmount();
+        final String note = fromApiJsonHelper.extractStringNamed("note", element);
+        baseDataValidator.reset().parameter("note").value(note).ignoreIfNull().notExceedingLengthOf(1000);
 
-        if (this.fromApiJsonHelper.parameterExists("dueDate", element)) {
-            this.fromApiJsonHelper.extractLocalDateNamed("dueDate", element);
-        }
+        final String externalId = fromApiJsonHelper.extractStringNamed("externalId", element);
+        baseDataValidator.reset().parameter("externalId").value(externalId).ignoreIfNull().notExceedingLengthOf(100);
+
+        final Long chargeOffReasonId = fromApiJsonHelper.extractLongNamed("chargeOffReasonId", element);
+        baseDataValidator.reset().parameter("chargeOffReasonId").value(chargeOffReasonId).ignoreIfNull().integerGreaterThanZero();
 
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
@@ -411,57 +429,24 @@ public final class LoanEventApiJsonValidator {
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
-    public void validateChargePaymentTransaction(final String json, final boolean isChargeIdIncluded) {
-
-        if (StringUtils.isBlank(json)) {
-            throw new InvalidJsonException();
-        }
-        Set<String> transactionParameters = null;
-        if (isChargeIdIncluded) {
-            transactionParameters = new HashSet<>(
-                    Arrays.asList("transactionDate", "locale", "dateFormat", "chargeId", "dueDate", "installmentNumber"));
-        } else {
-            transactionParameters = new HashSet<>(Arrays.asList("transactionDate", "locale", "dateFormat", "dueDate", "installmentNumber"));
-        }
-
-        final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
-        this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, transactionParameters);
-
-        final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
-        final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
-                .resource("loan.charge.payment.transaction");
-
-        final JsonElement element = this.fromApiJsonHelper.parse(json);
-        final LocalDate transactionDate = this.fromApiJsonHelper.extractLocalDateNamed("transactionDate", element);
-        if (isChargeIdIncluded) {
-            final Long chargeId = this.fromApiJsonHelper.extractLongNamed("chargeId", element);
-            baseDataValidator.reset().parameter("chargeId").value(chargeId).notNull().integerGreaterThanZero();
-        }
-        baseDataValidator.reset().parameter("transactionDate").value(transactionDate).notNull();
-        final Integer installmentNumber = this.fromApiJsonHelper.extractIntegerWithLocaleNamed("installmentNumber", element);
-        baseDataValidator.reset().parameter("installmentNumber").value(installmentNumber).ignoreIfNull().integerGreaterThanZero();
-
-        throwExceptionIfValidationWarningsExist(dataValidationErrors);
-    }
-
-    public void validateInstallmentChargeTransaction(final String json) {
-
+    public void validateMarkAsFraudLoan(final String json) {
         if (StringUtils.isBlank(json)) {
             return;
         }
-        Set<String> transactionParameters = new HashSet<>(Arrays.asList("dueDate", "locale", "dateFormat", "installmentNumber"));
+        Set<String> transactionParameters = new HashSet<>(Arrays.asList(LoanApiConstants.FRAUD_ATTRIBUTE_NAME));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, transactionParameters);
 
         final List<ApiParameterError> dataValidationErrors = new ArrayList<>();
         final DataValidatorBuilder baseDataValidator = new DataValidatorBuilder(dataValidationErrors)
-                .resource("loan.charge.waive.transaction");
+                .resource(LoanApiConstants.LOAN_FRAUD_DATAVALIDATOR_PREFIX);
 
         final JsonElement element = this.fromApiJsonHelper.parse(json);
 
-        final Integer installmentNumber = this.fromApiJsonHelper.extractIntegerWithLocaleNamed("installmentNumber", element);
-        baseDataValidator.reset().parameter("installmentNumber").value(installmentNumber).ignoreIfNull().integerGreaterThanZero();
+        final boolean isFraud = this.fromApiJsonHelper.extractBooleanNamed(LoanApiConstants.FRAUD_ATTRIBUTE_NAME, element);
+        baseDataValidator.reset().parameter(LoanApiConstants.FRAUD_ATTRIBUTE_NAME).value(isFraud).notNull();
+
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -471,10 +456,10 @@ public final class LoanEventApiJsonValidator {
             throw new InvalidJsonException();
         }
 
-        final Set<String> disbursementParameters = new HashSet<>(
-                Arrays.asList("locale", "dateFormat", LoanApiConstants.disbursementDataParameterName,
-                        LoanApiConstants.approvedLoanAmountParameterName, LoanApiConstants.updatedDisbursementDateParameterName,
-                        LoanApiConstants.updatedDisbursementPrincipalParameterName, LoanApiConstants.disbursementDateParameterName));
+        final Set<String> disbursementParameters = new HashSet<>(Arrays.asList("locale", "dateFormat",
+                LoanApiConstants.disbursementDataParameterName, LoanApiConstants.approvedLoanAmountParameterName,
+                LoanApiConstants.updatedDisbursementDateParameterName, LoanApiConstants.updatedDisbursementPrincipalParameterName,
+                LoanApiConstants.expectedDisbursementDateParameterName));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, disbursementParameters);
@@ -484,8 +469,8 @@ public final class LoanEventApiJsonValidator {
 
         final JsonElement element = this.fromApiJsonHelper.parse(json);
         final LocalDate actualDisbursementDate = this.fromApiJsonHelper
-                .extractLocalDateNamed(LoanApiConstants.disbursementDateParameterName, element);
-        baseDataValidator.reset().parameter(LoanApiConstants.disbursementDateParameterName).value(actualDisbursementDate).notNull();
+                .extractLocalDateNamed(LoanApiConstants.expectedDisbursementDateParameterName, element);
+        baseDataValidator.reset().parameter(LoanApiConstants.expectedDisbursementDateParameterName).value(actualDisbursementDate).notNull();
 
         final Locale locale = this.fromApiJsonHelper.extractLocaleParameter(element.getAsJsonObject());
         final BigDecimal principal = this.fromApiJsonHelper
@@ -495,7 +480,7 @@ public final class LoanEventApiJsonValidator {
         final BigDecimal approvedPrincipal = this.fromApiJsonHelper.extractBigDecimalNamed(LoanApiConstants.approvedLoanAmountParameterName,
                 element, locale);
         if (loanDisbursementDetails.actualDisbursementDate() != null) {
-            baseDataValidator.reset().parameter(LoanApiConstants.disbursementDateParameterName)
+            baseDataValidator.reset().parameter(LoanApiConstants.expectedDisbursementDateParameterName)
                     .failWithCode(LoanApiConstants.ALREADY_DISBURSED);
         }
 
@@ -530,7 +515,7 @@ public final class LoanEventApiJsonValidator {
         baseDataValidator.reset().parameter("note").value(note).notExceedingLengthOf(1000);
 
         final String externalId = this.fromApiJsonHelper.extractStringNamed("externalId", element);
-        baseDataValidator.reset().parameter("externalId").value(externalId).notExceedingLengthOf(100);
+        baseDataValidator.reset().parameter("externalId").value(externalId).ignoreIfNull().notExceedingLengthOf(100);
 
         validatePaymentDetails(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
@@ -542,7 +527,8 @@ public final class LoanEventApiJsonValidator {
             throw new InvalidJsonException();
         }
 
-        final Set<String> foreclosureParameters = new HashSet<>(Arrays.asList("transactionDate", "note", "locale", "dateFormat"));
+        final Set<String> foreclosureParameters = new HashSet<>(
+                Arrays.asList("transactionDate", "note", "locale", "dateFormat", "externalId"));
 
         final Type typeOfMap = new TypeToken<Map<String, Object>>() {}.getType();
         this.fromApiJsonHelper.checkForUnsupportedParameters(typeOfMap, json, foreclosureParameters);
@@ -556,6 +542,9 @@ public final class LoanEventApiJsonValidator {
 
         final String note = this.fromApiJsonHelper.extractStringNamed("note", element);
         baseDataValidator.reset().parameter("note").value(note).notExceedingLengthOf(1000);
+
+        final String externalId = this.fromApiJsonHelper.extractStringNamed("externalId", element);
+        baseDataValidator.reset().parameter("externalId").value(externalId).ignoreIfNull().notExceedingLengthOf(100);
 
         validatePaymentDetails(baseDataValidator, element);
         throwExceptionIfValidationWarningsExist(dataValidationErrors);

@@ -29,11 +29,23 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
+import org.apache.fineract.client.models.GetDataTablesResponse;
+import org.apache.fineract.client.models.PostDataTablesAppTableIdResponse;
+import org.apache.fineract.client.models.PostDataTablesRequest;
+import org.apache.fineract.client.models.PostDataTablesResponse;
+import org.apache.fineract.client.models.PutDataTablesAppTableIdDatatableIdResponse;
+import org.apache.fineract.client.models.PutDataTablesRequest;
+import org.apache.fineract.client.models.PutDataTablesResponse;
+import org.apache.fineract.client.util.JSON;
+import org.apache.fineract.integrationtests.client.IntegrationTest;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class DatatableHelper {
+public class DatatableHelper extends IntegrationTest {
+
+    private static final Gson GSON = new JSON().getGson();
 
     private static final Logger LOG = LoggerFactory.getLogger(DatatableHelper.class);
     private final RequestSpecification requestSpec;
@@ -46,9 +58,53 @@ public class DatatableHelper {
         this.responseSpec = responseSpec;
     }
 
+    public <T> T createDatatable(final String json, final String jsonAttributeToGetBack) {
+        return Utils.performServerPost(this.requestSpec, this.responseSpec, DATATABLE_URL + "?" + Utils.TENANT_IDENTIFIER, json,
+                jsonAttributeToGetBack);
+    }
+
     public String createDatatable(final String apptableName, final boolean multiRow) {
         return Utils.performServerPost(this.requestSpec, this.responseSpec, DATATABLE_URL + "?" + Utils.TENANT_IDENTIFIER,
                 getTestDatatableAsJSON(apptableName, multiRow), "resourceIdentifier");
+    }
+
+    public <T> T createDatatableEntry(final String datatableName, final Integer apptableId, final boolean genericResultSet,
+            final String json) {
+        return Utils.performServerPost(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + apptableId
+                + "?genericResultSet=" + genericResultSet + "&" + Utils.TENANT_IDENTIFIER, json, "");
+    }
+
+    public PostDataTablesAppTableIdResponse addDatatableEntry(final String datatableName, final Integer apptableId,
+            final boolean genericResultSet, final String json) {
+        final String response = Utils.performServerPost(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/"
+                + apptableId + "?genericResultSet=" + genericResultSet + "&" + Utils.TENANT_IDENTIFIER, json);
+        return GSON.fromJson(response, PostDataTablesAppTableIdResponse.class);
+    }
+
+    public <T> T updateDatatableEntry(final String datatableName, final Integer apptableId, final boolean genericResultSet,
+            final String json) {
+        return Utils.performServerPut(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + apptableId
+                + "?genericResultSet=" + genericResultSet + "&" + Utils.TENANT_IDENTIFIER, json, "");
+    }
+
+    public <T> T updateDatatableEntry(final String datatableName, final Integer apptableId, final Integer entryId,
+            final boolean genericResultSet, final String json) {
+        return Utils.performServerPut(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + apptableId + "/"
+                + entryId + "?genericResultSet=" + genericResultSet + "&" + Utils.TENANT_IDENTIFIER, json, "");
+    }
+
+    public PutDataTablesAppTableIdDatatableIdResponse updateDatatableEntry(final String datatableName, final Integer apptableId,
+            final Integer entryId, final String json) {
+        final String response = Utils.performServerPut(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/"
+                + apptableId + "/" + entryId + "?genericResultSet=false&" + Utils.TENANT_IDENTIFIER, json, null);
+        return GSON.fromJson(response, PutDataTablesAppTableIdDatatableIdResponse.class);
+    }
+
+    public PutDataTablesAppTableIdDatatableIdResponse updateDatatableEntry(final String datatableName, final Integer apptableId,
+            final String json) {
+        final String response = Utils.performServerPut(this.requestSpec, this.responseSpec,
+                DATATABLE_URL + "/" + datatableName + "/" + apptableId + "?genericResultSet=false&" + Utils.TENANT_IDENTIFIER, json, null);
+        return GSON.fromJson(response, PutDataTablesAppTableIdDatatableIdResponse.class);
     }
 
     public Integer createDatatableEntry(final String apptableName, final String datatableName, final Integer apptableId,
@@ -64,13 +120,13 @@ public class DatatableHelper {
                 + "?genericResultSet=" + String.valueOf(genericResultset) + "&" + Utils.TENANT_IDENTIFIER);
     }
 
-    public List<String> readDatatableEntry(final String datatableName, final Integer resourceId, final boolean genericResultset,
+    public <T> T readDatatableEntry(final String datatableName, final Integer resourceId, final boolean genericResultset,
             final Integer datatableResourceId, final String jsonAttributeToGetBack) {
         if (datatableResourceId == null) {
-            return Utils.performServerGetList(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + resourceId
+            return Utils.performServerGet(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + resourceId
                     + "?genericResultSet=" + String.valueOf(genericResultset) + "&" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetBack);
         } else {
-            return Utils.performServerGetList(
+            return Utils.performServerGet(
                     this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/" + resourceId + "/" + datatableResourceId
                             + "?genericResultSet=" + String.valueOf(genericResultset) + "&" + Utils.TENANT_IDENTIFIER,
                     jsonAttributeToGetBack);
@@ -104,6 +160,32 @@ public class DatatableHelper {
         assertEquals(generatedDatatableName, responseRegisteredTableName, "ERROR IN CREATING THE DATATABLE");
     }
 
+    public static String getTestDatatableAsJSON(final String apptableName, final String datatableName, final String codeName,
+            final boolean multiRow) {
+        final HashMap<String, Object> map = new HashMap<>();
+        final List<HashMap<String, Object>> datatableColumnsList = new ArrayList<>();
+        map.put("datatableName", Objects.requireNonNullElseGet(datatableName, () -> Utils.randomNameGenerator(apptableName + "_", 5)));
+        map.put("apptableName", apptableName);
+        if ("m_client".equalsIgnoreCase(apptableName)) {
+            map.put("entitySubType", "PERSON");
+        } else {
+            map.put("entitySubType", "");
+        }
+        map.put("multiRow", multiRow);
+        addDatatableColumns(datatableColumnsList, "itsABoolean", "Boolean", false, null, null);
+        addDatatableColumns(datatableColumnsList, "itsADate", "Date", true, null, null);
+        addDatatableColumns(datatableColumnsList, "itsADatetime", "Datetime", true, null, null);
+        addDatatableColumns(datatableColumnsList, "itsADecimal", "Decimal", true, null, null);
+        addDatatableColumns(datatableColumnsList, "itsADropdown", "Dropdown", false, null, codeName);
+        addDatatableColumns(datatableColumnsList, "itsANumber", "Number", true, null, null);
+        addDatatableColumns(datatableColumnsList, "itsAString", "String", true, 10, null);
+        addDatatableColumns(datatableColumnsList, "itsAText", "Text", true, null, null);
+        map.put("columns", datatableColumnsList);
+        String requestJsonString = new Gson().toJson(map);
+        LOG.info("map : {}", requestJsonString);
+        return requestJsonString;
+    }
+
     public static String getTestDatatableAsJSON(final String apptableName, final boolean multiRow) {
         final HashMap<String, Object> map = new HashMap<>();
         final List<HashMap<String, Object>> datatableColumnsList = new ArrayList<>();
@@ -111,10 +193,10 @@ public class DatatableHelper {
         map.put("apptableName", apptableName);
         map.put("entitySubType", "PERSON");
         map.put("multiRow", multiRow);
-        addDatatableColumns(datatableColumnsList, "Spouse Name", "String", true, 25);
-        addDatatableColumns(datatableColumnsList, "Number of Dependents", "Number", true, null);
-        addDatatableColumns(datatableColumnsList, "Time of Visit", "DateTime", false, null);
-        addDatatableColumns(datatableColumnsList, "Date of Approval", "Date", false, null);
+        addDatatableColumns(datatableColumnsList, "Spouse Name", "String", true, 25, null);
+        addDatatableColumns(datatableColumnsList, "Number of Dependents", "Number", true, null, null);
+        addDatatableColumns(datatableColumnsList, "Time of Visit", "DateTime", false, null, null);
+        addDatatableColumns(datatableColumnsList, "Date of Approval", "Date", false, null, null);
         map.put("columns", datatableColumnsList);
         String requestJsonString = new Gson().toJson(map);
         LOG.info("map : {}", requestJsonString);
@@ -135,7 +217,7 @@ public class DatatableHelper {
     }
 
     public static List<HashMap<String, Object>> addDatatableColumns(List<HashMap<String, Object>> datatableColumnsList, String columnName,
-            String columnType, boolean isMandatory, Integer length) {
+            String columnType, boolean isMandatory, Integer length, String codeName) {
 
         final HashMap<String, Object> datatableColumnMap = new HashMap<>();
 
@@ -145,9 +227,57 @@ public class DatatableHelper {
         if (length != null) {
             datatableColumnMap.put("length", length);
         }
+        if (codeName != null) {
+            datatableColumnMap.put("code", codeName);
+        }
 
         datatableColumnsList.add(datatableColumnMap);
         return datatableColumnsList;
+    }
+
+    public static List<HashMap<String, Object>> addDatatableColumnsWithUniqueAndIndex(List<HashMap<String, Object>> datatableColumnsList,
+            String columnName, String columnType, boolean isMandatory, Integer length, String codeName, boolean isUnique,
+            boolean isIndexed) {
+
+        final HashMap<String, Object> datatableColumnMap = new HashMap<>();
+
+        datatableColumnMap.put("name", columnName);
+        datatableColumnMap.put("type", columnType);
+        datatableColumnMap.put("mandatory", isMandatory);
+        if (length != null) {
+            datatableColumnMap.put("length", length);
+        }
+        if (codeName != null) {
+            datatableColumnMap.put("code", codeName);
+        }
+        datatableColumnMap.put("unique", isUnique);
+        datatableColumnMap.put("indexed", isIndexed);
+        datatableColumnsList.add(datatableColumnMap);
+        return datatableColumnsList;
+    }
+
+    public PostDataTablesResponse createDatatable(PostDataTablesRequest request) {
+        return ok(fineract().dataTables.createDatatable(request));
+    }
+
+    public GetDataTablesResponse getDataTableDetails(final String dataTableName) {
+        return ok(fineract().dataTables.getDatatable(dataTableName));
+    }
+
+    public PutDataTablesResponse updateDatatable(String dataTableName, PutDataTablesRequest request) {
+        return ok(fineract().dataTables.updateDatatable(dataTableName, request));
+    }
+
+    public PostDataTablesResponse createDatatable(final String json) {
+        final String response = Utils.performServerPost(this.requestSpec, this.responseSpec, DATATABLE_URL + "?" + Utils.TENANT_IDENTIFIER,
+                json);
+        return GSON.fromJson(response, PostDataTablesResponse.class);
+    }
+
+    public PutDataTablesResponse updateDatatable(String dataTableName, final String json) {
+        final String response = Utils.performServerPut(this.requestSpec, this.responseSpec,
+                DATATABLE_URL + "/" + dataTableName + "?" + Utils.TENANT_IDENTIFIER, json);
+        return GSON.fromJson(response, PutDataTablesResponse.class);
     }
 
 }

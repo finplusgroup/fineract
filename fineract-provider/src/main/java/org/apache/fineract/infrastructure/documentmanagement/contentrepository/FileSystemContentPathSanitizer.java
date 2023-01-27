@@ -27,6 +27,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
+
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.documentmanagement.exception.ContentManagementException;
 import org.apache.tika.Tika;
@@ -34,7 +37,7 @@ import org.apache.tika.io.TikaInputStream;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.sax.BodyContentHandler;
-import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -42,21 +45,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
 
-    private static Pattern OVERWRITE_SIBLING_IMAGE = Pattern.compile(".*\\.\\./+[0-9]+/+.*");
+    private final FineractProperties fineractProperties;
 
-    @Value("${fineract.content.regex-whitelist-enabled}")
-    private boolean isRegexWhitelistEnabled;
-    @Value("${fineract.content.regex-whitelist}")
-    private List<String> regexWhitelist;
-    @Value("${fineract.content.mime-whitelist-enabled}")
-    private boolean isMimeWhitelistEnabled;
-    @Value("${fineract.content.mime-whitelist}")
-    private List<String> mimeWhitelist;
-    private List<Pattern> regexWhitelistPatterns;
+    private List<Pattern> regexWhitelist;
+
+    private static Pattern OVERWRITE_SIBLING_IMAGE = Pattern.compile(".*\\.\\./+[0-9]+/+.*");
 
     @PostConstruct
     public void init() {
-        regexWhitelistPatterns = regexWhitelist.stream().map(Pattern::compile).toList();
+        regexWhitelist = fineractProperties.getContent().getRegexWhitelist().stream().map(Pattern::compile).toList();
+
     }
 
     @Override
@@ -79,15 +77,17 @@ public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
                 log.debug("Path: {} -> {} ({})", path, sanitizedPath, fileName);
             }
 
-            if (isRegexWhitelistEnabled) {
-                boolean matches = regexWhitelistPatterns.stream().anyMatch(p -> p.matcher(fileName).matches());
+            if (fineractProperties.getContent().isRegexWhitelistEnabled()) {
+                boolean matches = regexWhitelist.stream().anyMatch(p -> p.matcher(fileName).matches());
+
 
                 if (!matches) {
                     throw new RuntimeException(String.format("File name not allowed: %s", fileName));
                 }
             }
 
-            if (is != null && isMimeWhitelistEnabled) {
+            if (is != null && fineractProperties.getContent().isMimeWhitelistEnabled()) {
+
                 Tika tika = new Tika();
                 String extensionMimeType = tika.detect(fileName);
 
@@ -95,7 +95,8 @@ public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
                     throw new RuntimeException(String.format("Could not detect mime type for filename %s!", fileName));
                 }
 
-                if (!mimeWhitelist.contains(extensionMimeType)) {
+                if (!fineractProperties.getContent().getMimeWhitelist().contains(extensionMimeType)) {
+
                     throw new RuntimeException(
                             String.format("Detected mime type %s for filename %s not allowed!", extensionMimeType, fileName));
                 }
@@ -106,7 +107,8 @@ public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
                     throw new RuntimeException(String.format("Could not detect content mime type for %s!", fileName));
                 }
 
-                if (!mimeWhitelist.contains(contentMimeType)) {
+                if (!fineractProperties.getContent().getMimeWhitelist().contains(contentMimeType)) {
+
                     throw new RuntimeException(
                             String.format("Detected content mime type %s for %s not allowed!", contentMimeType, fileName));
                 }
@@ -118,7 +120,9 @@ public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
             }
 
             Path target = Path.of(sanitizedPath);
-            Path rootFolder = Path.of(FileSystemContentRepository.FINERACT_BASE_DIR,
+
+            Path rootFolder = Path.of(fineractProperties.getContent().getFilesystem().getRootFolder(),
+
                     ThreadLocalContextUtil.getTenant().getName().replaceAll(" ", "").trim());
 
             if (!target.startsWith(rootFolder)) {
@@ -134,6 +138,8 @@ public class FileSystemContentPathSanitizer implements ContentPathSanitizer {
     private String detectContentMimeType(BufferedInputStream bis) throws Exception {
         TikaInputStream tis = TikaInputStream.get(bis);
         AutoDetectParser parser = new AutoDetectParser();
+
+        // NOTE: turn off write limit with "-1"
         BodyContentHandler handler = new BodyContentHandler(-1);
         Metadata metadata = new Metadata();
         parser.parse(tis, handler, metadata);

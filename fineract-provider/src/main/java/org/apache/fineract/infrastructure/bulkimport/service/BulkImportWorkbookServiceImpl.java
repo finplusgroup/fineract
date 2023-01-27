@@ -88,14 +88,13 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
             final String dateFormat) {
         try {
             if (entity != null && inputStream != null && fileDetail != null && locale != null && dateFormat != null) {
-
                 final ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 IOUtils.copy(inputStream, baos);
                 final byte[] bytes = baos.toByteArray();
                 InputStream clonedInputStream = new ByteArrayInputStream(bytes);
                 final BufferedInputStream bis = new BufferedInputStream(new ByteArrayInputStream(bytes));
                 final Tika tika = new Tika();
-                final TikaInputStream tikaInputStream = TikaInputStream.get(clonedInputStream);
+                final TikaInputStream tikaInputStream = TikaInputStream.get(bis);
                 final String fileType = tika.detect(tikaInputStream);
                 if (!fileType.contains("msoffice") && !fileType.contains("application/vnd.ms-excel")) {
                     // We had a problem where we tried to upload the downloaded
@@ -111,8 +110,8 @@ public class BulkImportWorkbookServiceImpl implements BulkImportWorkbookService 
                 if (entity.trim().equalsIgnoreCase(GlobalEntityType.CLIENTS_PERSON.toString())) {
                     entityType = GlobalEntityType.CLIENTS_PERSON;
                     primaryColumn = 0;
-                } else if (entity.trim().equalsIgnoreCase(GlobalEntityType.CLIENTS_ENTTTY.toString())) {
-                    entityType = GlobalEntityType.CLIENTS_ENTTTY;
+                } else if (entity.trim().equalsIgnoreCase(GlobalEntityType.CLIENTS_ENTITY.toString())) {
+                    entityType = GlobalEntityType.CLIENTS_ENTITY;
                     primaryColumn = 0;
                 } else if (entity.trim().equalsIgnoreCase(GlobalEntityType.CENTERS.toString())) {
                     entityType = GlobalEntityType.CENTERS;

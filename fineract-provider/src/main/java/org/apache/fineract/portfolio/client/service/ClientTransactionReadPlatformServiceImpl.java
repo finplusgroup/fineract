@@ -23,6 +23,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Collection;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
 import org.apache.fineract.infrastructure.core.service.Page;
@@ -36,28 +37,19 @@ import org.apache.fineract.portfolio.client.domain.ClientTransactionType;
 import org.apache.fineract.portfolio.client.exception.ClientTransactionNotFoundException;
 import org.apache.fineract.portfolio.paymentdetail.data.PaymentDetailData;
 import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
 public class ClientTransactionReadPlatformServiceImpl implements ClientTransactionReadPlatformService {
 
     private final JdbcTemplate jdbcTemplate;
     private final DatabaseSpecificSQLGenerator sqlGenerator;
-    private final ClientTransactionMapper clientTransactionMapper;
+    private final ClientTransactionMapper clientTransactionMapper = new ClientTransactionMapper();
     private final PaginationHelper paginationHelper;
-
-    @Autowired
-    public ClientTransactionReadPlatformServiceImpl(final JdbcTemplate jdbcTemplate, DatabaseSpecificSQLGenerator sqlGenerator,
-            PaginationHelper paginationHelper) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.sqlGenerator = sqlGenerator;
-        this.clientTransactionMapper = new ClientTransactionMapper();
-        this.paginationHelper = paginationHelper;
-    }
 
     private static final class ClientTransactionMapper implements RowMapper<ClientTransactionData> {
 
@@ -68,7 +60,7 @@ public class ClientTransactionReadPlatformServiceImpl implements ClientTransacti
             final StringBuilder sqlBuilder = new StringBuilder(400);
             sqlBuilder.append("tr.id as transactionId, tr.transaction_type_enum as transactionType,  ");
             sqlBuilder.append("tr.transaction_date as transactionDate, tr.amount as transactionAmount, ");
-            sqlBuilder.append("tr.created_date as submittedOnDate, tr.is_reversed as reversed, ");
+            sqlBuilder.append("tr.submitted_on_date as submittedOnDate, tr.is_reversed as reversed, ");
             sqlBuilder.append("tr.external_id as externalId, o.name as officeName, o.id as officeId, ");
             sqlBuilder.append("c.id as clientId, c.account_no as accountNo, ccpb.client_charge_id as clientChargeId, ");
             sqlBuilder.append("pd.payment_type_id as paymentType,pd.account_number as accountNumber,pd.check_number as checkNumber, ");
@@ -143,7 +135,7 @@ public class ClientTransactionReadPlatformServiceImpl implements ClientTransacti
         sqlBuilder.append("select " + sqlGenerator.calcFoundRows() + " ").append(this.clientTransactionMapper.schema())
                 .append(" where c.id = ? ");
         parameters[0] = clientId;
-        sqlBuilder.append(" order by tr.transaction_date DESC, tr.created_date DESC, tr.id DESC ");
+        sqlBuilder.append(" order by tr.transaction_date DESC, tr.submitted_on_date DESC, tr.id DESC ");
 
         // apply limit and offsets
 
@@ -169,7 +161,7 @@ public class ClientTransactionReadPlatformServiceImpl implements ClientTransacti
             sql = sql + " and ccpb.client_charge_id = ?";
         }
         parameters[0] = clientId;
-        sql = sql + " order by tr.transaction_date DESC, tr.created_date DESC, tr.id DESC";
+        sql = sql + " order by tr.transaction_date DESC, tr.submitted_on_date DESC, tr.id DESC";
         return this.jdbcTemplate.query(sql, this.clientTransactionMapper, parameters); // NOSONAR
     }
 

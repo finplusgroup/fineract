@@ -27,6 +27,7 @@ import javax.persistence.Table;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
+import org.apache.fineract.portfolio.loanaccount.data.LoanInstallmentChargeData;
 
 @Entity
 @Table(name = "m_loan_installment_charge")
@@ -185,7 +186,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom implements 
         Money amountPaidToDate = Money.of(incrementBy.getCurrency(), this.amountPaid);
         final Money amountOutstanding = Money.of(incrementBy.getCurrency(), this.amountOutstanding);
         Money amountPaidPreviously = amountPaidToDate;
-        Money amountPaidOnThisCharge = Money.zero(incrementBy.getCurrency());
+        Money amountPaidOnThisCharge;
         if (incrementBy.isGreaterThanOrEqualTo(amountOutstanding)) {
             amountPaidOnThisCharge = amountOutstanding;
             amountPaidToDate = amountPaidToDate.plus(amountOutstanding);
@@ -226,7 +227,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom implements 
         this.paid = false;
     }
 
-    public void resetAmountWaived(final BigDecimal amountWaived) {
+    public void setAmountWaived(final BigDecimal amountWaived) {
         this.amountWaived = amountWaived;
     }
 
@@ -234,7 +235,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom implements 
         this.waived = false;
     }
 
-    public void resetOutstandingAmount(final BigDecimal amountOutstanding) {
+    public void setOutstandingAmount(final BigDecimal amountOutstanding) {
         this.amountOutstanding = amountOutstanding;
     }
 
@@ -293,7 +294,7 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom implements 
 
         Money amountPaidToDate = Money.of(incrementBy.getCurrency(), this.amountPaid);
 
-        Money amountToDeductOnThisCharge = Money.zero(incrementBy.getCurrency());
+        Money amountToDeductOnThisCharge;
         if (incrementBy.isGreaterThanOrEqualTo(amountPaidToDate)) {
             amountToDeductOnThisCharge = amountPaidToDate;
             amountPaidToDate = Money.zero(incrementBy.getCurrency());
@@ -321,5 +322,10 @@ public class LoanInstallmentCharge extends AbstractPersistableCustom implements 
 
     public void setInstallment(LoanRepaymentScheduleInstallment installment) {
         this.installment = installment;
+    }
+
+    public LoanInstallmentChargeData toData() {
+        return LoanInstallmentChargeData.builder().installmentNumber(installment.getInstallmentNumber()).dueDate(installment.getDueDate())
+                .amount(amount).amountOutstanding(amountOutstanding).amountWaived(amountWaived).paid(paid).waived(waived).build();
     }
 }

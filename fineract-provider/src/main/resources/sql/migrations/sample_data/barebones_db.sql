@@ -2266,7 +2266,6 @@ CREATE TABLE IF NOT EXISTS `m_loan` (
   KEY `FKB6F935D87179A0CB` (`client_id`),
   KEY `FKB6F935D8C8D4B434` (`product_id`),
   KEY `FK7C885877240145` (`fund_id`),
-  KEY `FK_loan_ltp_strategy` (`loan_transaction_strategy_id`),
   KEY `FK_m_loan_m_staff` (`loan_officer_id`),
   KEY `group_id` (`group_id`),
   KEY `FK_m_loanpurpose_codevalue` (`loanpurpose_cv_id`),
@@ -2284,7 +2283,6 @@ CREATE TABLE IF NOT EXISTS `m_loan` (
   CONSTRAINT `FK_approvedon_userid` FOREIGN KEY (`approvedon_userid`) REFERENCES `m_appuser` (`id`),
   CONSTRAINT `FK_closedon_userid` FOREIGN KEY (`closedon_userid`) REFERENCES `m_appuser` (`id`),
   CONSTRAINT `FK_disbursedon_userid` FOREIGN KEY (`disbursedon_userid`) REFERENCES `m_appuser` (`id`),
-  CONSTRAINT `FK_loan_ltp_strategy` FOREIGN KEY (`loan_transaction_strategy_id`) REFERENCES `ref_loan_transaction_processing_strategy` (`id`),
   CONSTRAINT `FK_m_loan_m_staff` FOREIGN KEY (`loan_officer_id`) REFERENCES `m_staff` (`id`),
   CONSTRAINT `FK_m_loanpurpose_codevalue` FOREIGN KEY (`loanpurpose_cv_id`) REFERENCES `m_code_value` (`id`),
   CONSTRAINT `FK_rejectedon_userid` FOREIGN KEY (`rejectedon_userid`) REFERENCES `m_appuser` (`id`),
@@ -3884,7 +3882,7 @@ CREATE TABLE IF NOT EXISTS `m_portfolio_command_source` (
   `made_on_date` datetime NOT NULL,
   `checker_id` BIGINT DEFAULT NULL,
   `checked_on_date` datetime DEFAULT NULL,
-  `processing_result_enum` SMALLINT NOT NULL,
+  `status` SMALLINT NOT NULL,
   `product_id` BIGINT DEFAULT NULL,
   `transaction_id` varchar(100) DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -3894,7 +3892,7 @@ CREATE TABLE IF NOT EXISTS `m_portfolio_command_source` (
   KEY `entity_name` (`entity_name`,`resource_id`),
   KEY `made_on_date` (`made_on_date`),
   KEY `checked_on_date` (`checked_on_date`),
-  KEY `processing_result_enum` (`processing_result_enum`),
+  KEY `status` (`status`),
   KEY `office_id` (`office_id`),
   KEY `group_id` (`office_id`),
   KEY `client_id` (`office_id`),
@@ -3971,9 +3969,7 @@ CREATE TABLE IF NOT EXISTS `m_product_loan` (
   UNIQUE KEY `unq_short_name` (`short_name`),
   UNIQUE KEY `external_id_UNIQUE` (`external_id`),
   KEY `FKA6A8A7D77240145` (`fund_id`),
-  KEY `FK_ltp_strategy` (`loan_transaction_strategy_id`),
-  CONSTRAINT `FKA6A8A7D77240145` FOREIGN KEY (`fund_id`) REFERENCES `m_fund` (`id`),
-  CONSTRAINT `FK_ltp_strategy` FOREIGN KEY (`loan_transaction_strategy_id`) REFERENCES `ref_loan_transaction_processing_strategy` (`id`)
+  CONSTRAINT `FKA6A8A7D77240145` FOREIGN KEY (`fund_id`) REFERENCES `m_fund` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=UTF8MB4;
 
 -- Dumping data for table fineract_default.m_product_loan: ~0 rows (approximately)
@@ -5494,30 +5490,6 @@ INSERT INTO `ppi_scores` (`id`, `score_from`, `score_to`) VALUES
 /*!40000 ALTER TABLE `ppi_scores` ENABLE KEYS */;
 
 
--- Dumping structure for table fineract_default.ref_loan_transaction_processing_strategy
-DROP TABLE IF EXISTS `ref_loan_transaction_processing_strategy`;
-CREATE TABLE IF NOT EXISTS `ref_loan_transaction_processing_strategy` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `code` varchar(100) DEFAULT NULL,
-  `name` varchar(255) DEFAULT NULL,
-  `sort_order` INT DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `ltp_strategy_code` (`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=UTF8MB4;
-
--- Dumping data for table fineract_default.ref_loan_transaction_processing_strategy: ~7 rows (approximately)
-/*!40000 ALTER TABLE `ref_loan_transaction_processing_strategy` DISABLE KEYS */;
-INSERT INTO `ref_loan_transaction_processing_strategy` (`id`, `code`, `name`, `sort_order`) VALUES
-    (1, 'mifos-standard-strategy', 'Penalties, Fees, Interest, Principal order', 1),
-    (2, 'heavensfamily-strategy', 'HeavensFamily Unique', 6),
-    (3, 'creocore-strategy', 'Creocore Unique', 7),
-    (4, 'rbi-india-strategy', 'Overdue/Due Fee/Int,Principal', 2),
-    (5, 'principal-interest-penalties-fees-order-strategy', 'Principal, Interest, Penalties, Fees Order', 3),
-    (6, 'interest-principal-penalties-fees-order-strategy', 'Interest, Principal, Penalties, Fees Order', 4),
-    (7, 'early-repayment-strategy', 'Early Repayment Strategy', 5);
-/*!40000 ALTER TABLE `ref_loan_transaction_processing_strategy` ENABLE KEYS */;
-
-
 -- Dumping structure for table fineract_default.rpt_sequence
 DROP TABLE IF EXISTS `rpt_sequence`;
 CREATE TABLE IF NOT EXISTS `rpt_sequence` (
@@ -5660,10 +5632,12 @@ INSERT INTO `r_enum_value` (`enum_name`, `enum_id`, `enum_message_property`, `en
     ('portfolio_account_type_enum', 2, 'SAVING', 'EXPENSE', 0),
     ('portfolio_account_type_enum', 3, 'PROVISIONING', 'PROVISIONING', 0),
     ('portfolio_account_type_enum', 4, 'SHARES', 'SHARES', 0),
-    ('processing_result_enum', 0, 'invalid', 'Invalid', 0),
-    ('processing_result_enum', 1, 'processed', 'Processed', 0),
-    ('processing_result_enum', 2, 'awaiting.approval', 'Awaiting Approval', 0),
-    ('processing_result_enum', 3, 'rejected', 'Rejected', 0),
+    ('status', 0, 'invalid', 'Invalid', 0),
+    ('status', 1, 'processed', 'Processed', 0),
+    ('status', 2, 'awaiting.approval', 'Awaiting Approval', 0),
+    ('status', 3, 'rejected', 'Rejected', 0),
+    ('status', 4, 'underProcessing', 'Under Processing', 0),
+    ('status', 5, 'error', 'Error', 0),
     ('repayment_period_frequency_enum', 0, 'Days', 'Days', 0),
     ('repayment_period_frequency_enum', 1, 'Weeks', 'Weeks', 0),
     ('repayment_period_frequency_enum', 2, 'Months', 'Months', 0),

@@ -19,14 +19,6 @@
 
 ﻿-- currency symbols may not apply through command line on windows so use a different client like mysql workbench
 
-INSERT INTO `ref_loan_transaction_processing_strategy`
-(`id`,`code`,`name`)
-VALUES
-(1, 'mifos-standard-strategy', 'Mifos style'),
-(2, 'heavensfamily-strategy', 'Heavensfamily'),
-(3, 'creocore-strategy', 'Creocore'),
-(4, 'rbi-india-strategy', 'RBI (India)');
-
 INSERT INTO `c_configuration`
 (`name`, `enabled`)
 VALUES
@@ -55,10 +47,12 @@ VALUES
 ('loan_transaction_strategy_id',2,'heavensfamily-strategy','Heavensfamily'),
 ('loan_transaction_strategy_id',3,'creocore-strategy','Creocore'),
 ('loan_transaction_strategy_id',4,'rbi-india-strategy','RBI (India)'),
-('processing_result_enum',0,'invalid','Invalid'),
-('processing_result_enum',1,'processed','Processed'),
-('processing_result_enum',2,'awaiting.approval','Awaiting Approval'),
-('processing_result_enum',3,'rejected','Rejected'),
+('status',0,'invalid','Invalid'),
+('status',1,'processed','Processed'),
+('status',2,'awaiting.approval','Awaiting Approval'),
+('status',3,'rejected','Rejected'),
+('status',4,'underProcessing','Under Processing'),
+('status',5,'error','Error'),
 ('repayment_period_frequency_enum',0,'Days','Days'),
 ('repayment_period_frequency_enum',1,'Weeks','Weeks'),
 ('repayment_period_frequency_enum',2,'Months','Months'),

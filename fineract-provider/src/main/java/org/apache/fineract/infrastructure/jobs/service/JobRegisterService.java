@@ -18,9 +18,11 @@
  */
 package org.apache.fineract.infrastructure.jobs.service;
 
+import org.apache.fineract.infrastructure.jobs.domain.ScheduledJobDetail;
+
 public interface JobRegisterService {
 
-    void executeJob(Long jobId);
+    void executeJobWithParameters(Long jobId, String jobParametersJson);
 
     void rescheduleJob(Long jobId);
 
@@ -31,6 +33,8 @@ public interface JobRegisterService {
     boolean isSchedulerRunning();
 
     void stopScheduler(String name);
+
+    void scheduleJob(ScheduledJobDetail scheduledJobDetails);
 
     void stopAllSchedulers();
 

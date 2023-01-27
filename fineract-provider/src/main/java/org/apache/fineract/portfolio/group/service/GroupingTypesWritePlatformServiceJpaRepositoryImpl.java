@@ -48,15 +48,15 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
 import org.apache.fineract.infrastructure.dataqueries.data.StatusEnum;
 import org.apache.fineract.infrastructure.dataqueries.service.EntityDatatableChecksWritePlatformService;
+import org.apache.fineract.infrastructure.event.business.domain.group.CentersCreateBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.group.GroupsCreateBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.apache.fineract.organisation.office.exception.InvalidOfficeException;
 import org.apache.fineract.organisation.staff.domain.Staff;
 import org.apache.fineract.organisation.staff.domain.StaffRepositoryWrapper;
-import org.apache.fineract.portfolio.businessevent.domain.group.CentersCreateBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.group.GroupsCreateBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.service.BusinessEventNotifierService;
 import org.apache.fineract.portfolio.calendar.domain.Calendar;
 import org.apache.fineract.portfolio.calendar.domain.CalendarEntityType;
 import org.apache.fineract.portfolio.calendar.domain.CalendarInstance;
@@ -207,7 +207,7 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
                 }
 
                 this.entityDatatableChecksWritePlatformService.runTheCheck(newGroup.getId(), EntityTables.GROUP.getName(),
-                        StatusEnum.CREATE.getCode().longValue(), EntityTables.GROUP.getForeignKeyColumnNameOnDatatable());
+                        StatusEnum.CREATE.getCode(), EntityTables.GROUP.getForeignKeyColumnNameOnDatatable(), null);
             }
 
             return new CommandProcessingResultBuilder() //
@@ -323,8 +323,8 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
         if (!isGroupClientCountValid) {
             throw new GroupMemberCountNotInPermissibleRangeException(group.getId(), minClients, maxClients);
         }
-        entityDatatableChecksWritePlatformService.runTheCheck(group.getId(), EntityTables.GROUP.getName(),
-                StatusEnum.ACTIVATE.getCode().longValue(), EntityTables.GROUP.getForeignKeyColumnNameOnDatatable());
+        entityDatatableChecksWritePlatformService.runTheCheck(group.getId(), EntityTables.GROUP.getName(), StatusEnum.ACTIVATE.getCode(),
+                EntityTables.GROUP.getForeignKeyColumnNameOnDatatable(), null);
     }
 
     public void validateGroupRulesBeforeClientAssociation(final Group group) {
@@ -595,8 +595,8 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
 
         validateLoansAndSavingsForGroupOrCenterClose(group, closureDate);
 
-        entityDatatableChecksWritePlatformService.runTheCheck(groupId, EntityTables.GROUP.getName(), StatusEnum.CLOSE.getCode().longValue(),
-                EntityTables.GROUP.getForeignKeyColumnNameOnDatatable());
+        entityDatatableChecksWritePlatformService.runTheCheck(groupId, EntityTables.GROUP.getName(), StatusEnum.CLOSE.getCode(),
+                EntityTables.GROUP.getForeignKeyColumnNameOnDatatable(), null);
 
         group.close(currentUser, closureReason, closureDate);
 
@@ -611,7 +611,7 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
     private void validateLoansAndSavingsForGroupOrCenterClose(final Group groupOrCenter, final LocalDate closureDate) {
         final Collection<Loan> groupLoans = this.loanRepositoryWrapper.findByGroupId(groupOrCenter.getId());
         for (final Loan loan : groupLoans) {
-            final LoanStatusMapper loanStatus = new LoanStatusMapper(loan.status().getValue());
+            final LoanStatusMapper loanStatus = new LoanStatusMapper(loan.getStatus().getValue());
             if (loanStatus.isOpen()) {
                 final String errorMessage = groupOrCenter.getGroupLevel().getLevelName() + " cannot be closed because of non-closed loans.";
                 throw new InvalidGroupStateTransitionException(groupOrCenter.getGroupLevel().getLevelName(), "close", "loan.not.closed",
@@ -670,8 +670,8 @@ public class GroupingTypesWritePlatformServiceJpaRepositoryImpl implements Group
 
         validateLoansAndSavingsForGroupOrCenterClose(center, closureDate);
 
-        entityDatatableChecksWritePlatformService.runTheCheck(centerId, EntityTables.GROUP.getName(),
-                StatusEnum.ACTIVATE.getCode().longValue(), EntityTables.GROUP.getForeignKeyColumnNameOnDatatable());
+        entityDatatableChecksWritePlatformService.runTheCheck(centerId, EntityTables.GROUP.getName(), StatusEnum.ACTIVATE.getCode(),
+                EntityTables.GROUP.getForeignKeyColumnNameOnDatatable(), null);
 
         center.close(currentUser, closureReason, closureDate);
 

@@ -67,12 +67,18 @@ final class DatatablesApiResourceSwagger {
             public Boolean mandatory;
             @Schema(example = "1653", description = "Length of the text field. Mandatory if type String is used, otherwise an error is returned.")
             public Long length;
+            @Schema(example = "true", description = "Defaults to false")
+            public Boolean unique;
+            @Schema(example = "true", description = "Defaults to false")
+            public Boolean indexed;
         }
 
         @Schema(required = true, example = "m_client")
         public String apptableName;
         @Schema(required = true, example = "extra_client_details")
         public String datatableName;
+        @Schema(example = "abc")
+        public String entitySubType;
         @Schema(required = false, description = "Allows to create multiple entries in the Data Table. Optional, defaults to false. If this property is not provided Data Table will allow only one entry.", example = "true")
         public boolean multiRow;
         @Schema(required = true)
@@ -117,6 +123,10 @@ final class DatatablesApiResourceSwagger {
             public String code;
             @Schema(example = "true")
             public boolean mandatory;
+            @Schema(example = "true")
+            public boolean unique;
+            @Schema(example = "true", description = "Defaults to false")
+            public Boolean indexed;
         }
 
         static final class PutDataTablesRequestChangeColumns {
@@ -133,13 +143,17 @@ final class DatatablesApiResourceSwagger {
             public String newCode;
             @Schema(example = "true")
             public boolean mandatory;
+            @Schema(example = "true")
+            public boolean unique;
+            @Schema(example = "true", description = "Defaults to false")
+            public Boolean indexed;
         }
 
         @Schema(example = "m_client")
-        public String appTableName;
+        public String apptableName;
         public List<PutDataTablesRequestDropColumns> dropColumns;
         public List<PutDataTablesRequestAddColumns> addColumns;
-        public List<PutDataTablesRequestChangeColumns> ChangeColumns;
+        public List<PutDataTablesRequestChangeColumns> changeColumns;
     }
 
     @Schema(description = "PutDataTablesResponse")

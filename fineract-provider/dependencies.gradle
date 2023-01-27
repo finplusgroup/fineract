@@ -27,13 +27,23 @@ dependencies {
     // implementation dependencies are directly used (compiled against) in src/main (and src/test)
     //
     implementation(
+            project(path: ':fineract-avro-schemas')
+            )
+    implementation(
             'org.springframework.boot:spring-boot-starter-web',
             'org.springframework.boot:spring-boot-starter-security',
             'org.springframework.boot:spring-boot-starter-cache',
             'org.springframework.boot:spring-boot-starter-oauth2-resource-server',
             'org.springframework.boot:spring-boot-starter-actuator',
+            'org.springframework.boot:spring-boot-starter-batch',
+            'org.springframework.batch:spring-batch-integration',
+            'org.springframework.boot:spring-boot-starter-integration',
+            'org.springframework.integration:spring-integration-event',
+            'org.springframework.integration:spring-integration-jms',
 
-            'org.glassfish.jersey.media:jersey-media-multipart:2.36',
+            'org.apache.avro:avro',
+            'jakarta.ws.rs:jakarta.ws.rs-api',
+            'org.glassfish.jersey.media:jersey-media-multipart',
 
             'org.springframework:spring-jms',
             'org.springframework:spring-context-support',
@@ -76,6 +86,8 @@ dependencies {
             'org.springdoc:springdoc-openapi-common',
             'org.springdoc:springdoc-openapi-security',
             'org.mapstruct:mapstruct',
+
+            'io.github.resilience4j:resilience4j-spring-boot2',
             )
 
     implementation ('org.apache.commons:commons-email') {
@@ -108,9 +120,13 @@ dependencies {
     implementation ('org.quartz-scheduler:quartz') {
         exclude group: 'com.zaxxer', module: 'HikariCP-java7'
     }
-    implementation ('com.amazonaws:aws-java-sdk-s3') {
-        exclude group: 'commons-logging'
+    implementation platform('software.amazon.awssdk:bom')
+    implementation('org.apache.commons:commons-csv'){}
+    implementation ('software.amazon.awssdk:s3') {
     }
+    implementation ('software.amazon.awssdk:auth') {
+    }
+
     implementation ('org.mnode.ical4j:ical4j') {
         exclude group: 'commons-logging'
         exclude group: 'javax.activation'
@@ -153,10 +169,6 @@ dependencies {
     //
     testImplementation( 'io.cucumber:cucumber-spring',
             'io.github.classgraph:classgraph',
-            project(':module:dummy:core'),
-            project(':module:dummy:service'),
-            project(':module:dummy:starter'),
-            project(':custom:foo:service'),
             )
     testImplementation ('org.springframework.boot:spring-boot-starter-test') {
         exclude group: 'com.jayway.jsonpath', module: 'json-path'
@@ -165,5 +177,6 @@ dependencies {
         exclude group: 'javax.activation'
         exclude group: 'org.skyscreamer'
     }
+    testImplementation ('org.mockito:mockito-inline')
 
 }

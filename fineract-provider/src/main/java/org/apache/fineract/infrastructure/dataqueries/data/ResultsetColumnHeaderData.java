@@ -34,6 +34,8 @@ public final class ResultsetColumnHeaderData implements Serializable {
     private final String columnDisplayType;
     private final boolean isColumnNullable;
     private final boolean isColumnPrimaryKey;
+    private final boolean isColumnUnique;
+    private final boolean isColumnIndexed;
 
     private final List<ResultsetColumnValueData> columnValues;
     private final String columnCode;
@@ -45,20 +47,22 @@ public final class ResultsetColumnHeaderData implements Serializable {
         final boolean columnIsPrimaryKey = false;
         final List<ResultsetColumnValueData> columnValues = new ArrayList<>();
         final String columnCode = null;
+        final boolean columnIsUnique = false;
+        final boolean columnIsIndexed = false;
         return new ResultsetColumnHeaderData(columnName, columnType, columnLength, columnNullable, columnIsPrimaryKey, columnValues,
-                columnCode);
+                columnCode, columnIsUnique, columnIsIndexed);
     }
 
     public static ResultsetColumnHeaderData detailed(final String columnName, final String columnType, final Long columnLength,
             final boolean columnNullable, final boolean columnIsPrimaryKey, final List<ResultsetColumnValueData> columnValues,
-            final String columnCode) {
+            final String columnCode, final boolean columnIsUnique, final boolean columnIsIndexed) {
         return new ResultsetColumnHeaderData(columnName, columnType, columnLength, columnNullable, columnIsPrimaryKey, columnValues,
-                columnCode);
+                columnCode, columnIsUnique, columnIsIndexed);
     }
 
     private ResultsetColumnHeaderData(final String columnName, final String columnType, final Long columnLength,
             final boolean columnNullable, final boolean columnIsPrimaryKey, final List<ResultsetColumnValueData> columnValues,
-            final String columnCode) {
+            final String columnCode, final boolean columnIsUnique, final boolean columnIsIndexed) {
         this.columnName = columnName;
         this.columnType = columnType;
         this.columnLength = columnLength;
@@ -66,6 +70,8 @@ public final class ResultsetColumnHeaderData implements Serializable {
         this.isColumnPrimaryKey = columnIsPrimaryKey;
         this.columnValues = columnValues;
         this.columnCode = columnCode;
+        this.isColumnUnique = columnIsUnique;
+        this.isColumnIndexed = columnIsIndexed;
 
         // Refer org.drizzle.jdbc.internal.mysql.MySQLType.java
         adjustColumnTypes();
@@ -87,7 +93,7 @@ public final class ResultsetColumnHeaderData implements Serializable {
                 displayType = "DECIMAL";
             } else if (isAnyText()) {
                 displayType = "TEXT";
-            } else if (isBit()) {
+            } else if (isBit() || isBoolean()) {
                 displayType = "BOOLEAN";
             } else {
                 throw new PlatformDataIntegrityException("error.msg.invalid.lookup.type",
@@ -231,6 +237,10 @@ public final class ResultsetColumnHeaderData implements Serializable {
         return "bit".equalsIgnoreCase(this.columnType);
     }
 
+    private boolean isBoolean() {
+        return "boolean".equalsIgnoreCase(this.columnType) || "bool".equalsIgnoreCase(this.columnType);
+    }
+
     public String getColumnName() {
         return this.columnName;
     }
@@ -249,6 +259,14 @@ public final class ResultsetColumnHeaderData implements Serializable {
 
     public boolean getIsColumnPrimaryKey() {
         return isColumnPrimaryKey;
+    }
+
+    public boolean getIsColumnUnique() {
+        return isColumnUnique;
+    }
+
+    public boolean getIsColumnIndexed() {
+        return isColumnIndexed;
     }
 
     public String getColumnDisplayType() {

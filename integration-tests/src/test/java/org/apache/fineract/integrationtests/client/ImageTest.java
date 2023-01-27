@@ -20,7 +20,6 @@ package org.apache.fineract.integrationtests.client;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.io.File;
 import java.io.IOException;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
@@ -45,7 +44,7 @@ import retrofit2.http.Headers;
 @Slf4j
 public class ImageTest extends IntegrationTest {
 
-    final File testImage = new File(getClass().getResource("/michael.vorburger-crepes.jpg").getFile());
+    final MultipartBody.Part testPart = createPart("michael.vorburger-crepes.jpg", "michael.vorburger-crepes.jpg", "image/jpeg");
 
     Long clientId = new ClientTest().getClientId();
     Long staffId = new StaffTest().getStaffId();
@@ -53,8 +52,8 @@ public class ImageTest extends IntegrationTest {
     @Test
     @Order(1)
     void create() {
-        ok(fineract().images.create("staff", staffId, Parts.fromFile(testImage)));
-        ok(fineract().images.create("clients", clientId, Parts.fromFile(testImage)));
+        ok(fineract().images.create("staff", staffId, testPart));
+        ok(fineract().images.create("clients", clientId, testPart));
     }
 
     @Test
@@ -89,8 +88,8 @@ public class ImageTest extends IntegrationTest {
         Response<ResponseBody> r = okR(fineract().images.get("staff", staffId, 3505, 1972, "inline_octet"));
         try (ResponseBody body = r.body()) {
             assertThat(body.contentType()).isEqualTo(MediaType.get("image/jpeg"));
-            assertThat(body.bytes().length).isEqualTo(testImage.length());
-            assertThat(body.contentLength()).isEqualTo(testImage.length());
+            assertThat(body.bytes().length).isEqualTo(testPart.body().contentLength());
+            assertThat(body.contentLength()).isEqualTo(testPart.body().contentLength());
         }
 
         var staff = ok(fineract().staff.retrieveOne8(staffId));
@@ -103,8 +102,8 @@ public class ImageTest extends IntegrationTest {
     void getOctetOutput() throws IOException {
         ResponseBody r = ok(fineract().images.get("staff", staffId, 3505, 1972, "octet"));
         assertThat(r.contentType()).isEqualTo(MediaType.get("image/jpeg"));
-        assertThat(r.bytes().length).isEqualTo(testImage.length());
-        assertThat(r.contentLength()).isEqualTo(testImage.length());
+        assertThat(r.bytes().length).isEqualTo(testPart.body().contentLength());
+        assertThat(r.contentLength()).isEqualTo(testPart.body().contentLength());
     }
 
     @Test
@@ -128,13 +127,13 @@ public class ImageTest extends IntegrationTest {
     void getBytes() throws IOException {
         ResponseBody r = ok(fineract().createService(ImagesApiWithHeadersForTest.class).getBytes("staff", staffId, 3505, 1972, null));
         assertThat(r.contentType()).isEqualTo(MediaType.get("image/jpeg"));
-        assertThat(r.bytes().length).isEqualTo(testImage.length());
+        assertThat(r.bytes().length).isEqualTo(testPart.body().contentLength());
     }
 
     @Test
     @Order(50)
     void update() {
-        ok(fineract().images.update("staff", staffId, Parts.fromFile(testImage)));
+        ok(fineract().images.update("staff", staffId, testPart));
     }
 
     @Test

@@ -28,6 +28,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.client.models.GetResourceTypeResourceIdNotesNoteIdResponse;
+import org.apache.fineract.client.models.PostResourceTypeResourceIdNotesResponse;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
@@ -36,6 +38,8 @@ import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
+import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
+import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +51,8 @@ public class NotesTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec404;
     private LoanTransactionHelper loanTransactionHelper;
+    private SavingsProductHelper savingsProductHelper;
+    private SavingsAccountHelper savingsAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -56,6 +62,8 @@ public class NotesTest {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.responseSpec404 = new ResponseSpecBuilder().expectStatusCode(404).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
+        this.savingsProductHelper = new SavingsProductHelper();
+        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
     }
 
     @Test
@@ -190,6 +198,33 @@ public class NotesTest {
 
     }
 
+    @Test
+    public void testCreateSavingsNote() {
+        final String noteText = "this is a test Savings note";
+        final String testDate = "01 January 2012";
+
+        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec, testDate);
+        // Savings Account
+        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
+                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance().build();
+        final Integer savingsProductId = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductId, "INDIVIDUAL",
+                testDate);
+        Assertions.assertNotNull(savingsId);
+
+        // Notes
+        final String payload = "{\"note\": \"" + noteText + "\"}";
+        final PostResourceTypeResourceIdNotesResponse postNoteResponse = NotesHelper.createSavingsNote(requestSpec, responseSpec, savingsId,
+                payload);
+        Assertions.assertNotNull(postNoteResponse);
+        Assertions.assertNotNull(postNoteResponse.getResourceId());
+
+        final GetResourceTypeResourceIdNotesNoteIdResponse getNoteResponse = NotesHelper.getSavingsNote(requestSpec, responseSpec,
+                savingsId, postNoteResponse.getResourceId());
+        Assertions.assertNotNull(getNoteResponse);
+        Assertions.assertEquals(noteText, getNoteResponse.getNote());
+    }
+
     private Integer applyForLoanApplication(final Integer clientID, final Integer loanProductID) {
         List<HashMap> collaterals = new ArrayList<>();
         final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
@@ -275,7 +310,8 @@ public class NotesTest {
 
         this.loanTransactionHelper.approveLoan("02 April 2012", loanId);
         String loanDetails = this.loanTransactionHelper.getLoanDetails(this.requestSpec, this.responseSpec, loanId);
-        this.loanTransactionHelper.disburseLoan("02 April 2012", loanId, JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
+        this.loanTransactionHelper.disburseLoanWithNetDisbursalAmount("02 April 2012", loanId,
+                JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
         HashMap repayment = this.loanTransactionHelper.makeRepayment("02 April 2012", 100.0f, loanId);
         Integer loanTransactionId = (Integer) repayment.get("resourceId");
         Assertions.assertNotNull(loanTransactionId);
@@ -299,7 +335,8 @@ public class NotesTest {
 
         this.loanTransactionHelper.approveLoan("02 April 2012", loanId);
         String loanDetails = this.loanTransactionHelper.getLoanDetails(this.requestSpec, this.responseSpec, loanId);
-        this.loanTransactionHelper.disburseLoan("02 April 2012", loanId, JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
+        this.loanTransactionHelper.disburseLoanWithNetDisbursalAmount("02 April 2012", loanId,
+                JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
         HashMap repayment = this.loanTransactionHelper.makeRepayment("02 April 2012", 100.0f, loanId);
         Integer loanTransactionId = (Integer) repayment.get("resourceId");
         Assertions.assertNotNull(loanTransactionId);
@@ -332,7 +369,8 @@ public class NotesTest {
 
         this.loanTransactionHelper.approveLoan("02 April 2012", loanId);
         String loanDetails = this.loanTransactionHelper.getLoanDetails(this.requestSpec, this.responseSpec, loanId);
-        this.loanTransactionHelper.disburseLoan("02 April 2012", loanId, JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
+        this.loanTransactionHelper.disburseLoanWithNetDisbursalAmount("02 April 2012", loanId,
+                JsonPath.from(loanDetails).get("netDisbursalAmount").toString());
         HashMap repayment = this.loanTransactionHelper.makeRepayment("02 April 2012", 100.0f, loanId);
         Integer loanTransactionId = (Integer) repayment.get("resourceId");
         Assertions.assertNotNull(loanTransactionId);

@@ -25,7 +25,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Base64;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
+import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.domain.Base64EncodedImage;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.documentmanagement.command.DocumentCommand;
@@ -34,14 +37,17 @@ import org.apache.fineract.infrastructure.documentmanagement.data.FileData;
 import org.apache.fineract.infrastructure.documentmanagement.data.ImageData;
 import org.apache.fineract.infrastructure.documentmanagement.domain.StorageType;
 import org.apache.fineract.infrastructure.documentmanagement.exception.ContentManagementException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
 
+@Slf4j
+@RequiredArgsConstructor
+@Component
+@ConditionalOnProperty("fineract.content.filesystem.enabled")
 public class FileSystemContentRepository implements ContentRepository {
 
-    private static final Logger LOG = LoggerFactory.getLogger(FileSystemContentRepository.class);
-
-    public static final String FINERACT_BASE_DIR = System.getProperty("user.home") + File.separator + ".fineract";
+    private final FileSystemContentPathSanitizer pathSanitizer;
+    private final FineractProperties fineractProperties;
 
     private final FileSystemContentPathSanitizer pathSanitizer;
 
@@ -57,16 +63,14 @@ public class FileSystemContentRepository implements ContentRepository {
         final String fileLocation = generateFileParentDirectory(documentCommand.getParentEntityType(), documentCommand.getParentEntityId())
                 + File.separator + fileName;
 
-        writeFileToFileSystem(fileName, uploadedInputStream, fileLocation);
-        return fileLocation;
+        return writeFileToFileSystem(fileName, uploadedInputStream, fileLocation);
     }
 
     @Override
     public String saveImage(final InputStream uploadedInputStream, final Long resourceId, final String imageName, final Long fileSize) {
         ContentRepositoryUtils.validateFileSizeWithinPermissibleRange(fileSize, imageName);
         final String fileLocation = generateClientImageParentDirectory(resourceId) + File.separator + imageName;
-        writeFileToFileSystem(imageName, uploadedInputStream, fileLocation);
-        return fileLocation;
+        return writeFileToFileSystem(imageName, uploadedInputStream, fileLocation);
     }
 
     @Override
@@ -76,10 +80,9 @@ public class FileSystemContentRepository implements ContentRepository {
         String base64EncodedImageString = base64EncodedImage.getBase64EncodedString();
         try {
             final InputStream toUploadInputStream = new ByteArrayInputStream(Base64.getMimeDecoder().decode(base64EncodedImageString));
-            writeFileToFileSystem(imageName, toUploadInputStream, fileLocation);
-            return fileLocation;
+            return writeFileToFileSystem(imageName, toUploadInputStream, fileLocation);
         } catch (IllegalArgumentException iae) {
-            LOG.error("IllegalArgumentException due to invalid Base64 encoding: {}", base64EncodedImageString, iae);
+            log.error("IllegalArgumentException due to invalid Base64 encoding: {}", base64EncodedImageString, iae);
             throw iae;
         }
     }
@@ -95,29 +98,35 @@ public class FileSystemContentRepository implements ContentRepository {
     }
 
     private void deleteFileInternal(final String documentPath) {
-        String path = pathSanitizer.sanitize(documentPath);
 
-        final File fileToBeDeleted = new File(path);
+        String sanitizedPath = pathSanitizer.sanitize(documentPath);
+
+        final File fileToBeDeleted = new File(sanitizedPath);
         final boolean fileDeleted = fileToBeDeleted.delete();
         if (!fileDeleted) {
             // no need to throw an Error, what's a caller going to do about it, so simply log a warning
-            LOG.warn("Unable to delete file {}", path);
+            log.warn("Unable to delete file {}", documentPath);
+
         }
     }
 
     @Override
     public FileData fetchFile(final DocumentData documentData) {
-        String path = pathSanitizer.sanitize(documentData.fileLocation());
 
-        final File file = new File(path);
-        return new FileData(Files.asByteSource(file), file.getName(), documentData.contentType());
+        String sanitizedPath = pathSanitizer.sanitize(documentData.fileLocation());
+
+        final File file = new File(sanitizedPath);
+        return new FileData(Files.asByteSource(file), documentData.fileName(), documentData.contentType());
+
     }
 
     @Override
     public FileData fetchImage(final ImageData imageData) {
-        String path = pathSanitizer.sanitize(imageData.location());
 
-        final File file = new File(path);
+        String sanitizedPath = pathSanitizer.sanitize(imageData.location());
+
+        final File file = new File(sanitizedPath);
+
         return new FileData(Files.asByteSource(file), imageData.getEntityDisplayName(), imageData.contentType().getValue());
     }
 
@@ -130,16 +139,17 @@ public class FileSystemContentRepository implements ContentRepository {
      * Generate the directory path for storing the new document
      */
     private String generateFileParentDirectory(final String entityType, final Long entityId) {
-        return FileSystemContentRepository.FINERACT_BASE_DIR + File.separator
+        return fineractProperties.getContent().getFilesystem().getRootFolder() + File.separator
                 + ThreadLocalContextUtil.getTenant().getName().replaceAll(" ", "").trim() + File.separator + "documents" + File.separator
                 + entityType + File.separator + entityId + File.separator + ContentRepositoryUtils.generateRandomString();
     }
 
     /**
-     * Generate directory path for storing new Image
+     * Generate ContentRepositoryUtilsfineractProperties.getContentgetWhitelist()getBlacklist() path for storing new
+     * Image
      */
     private String generateClientImageParentDirectory(final Long resourceId) {
-        return FileSystemContentRepository.FINERACT_BASE_DIR + File.separator
+        return fineractProperties.getContent().getFilesystem().getRootFolder() + File.separator
                 + ThreadLocalContextUtil.getTenant().getName().replaceAll(" ", "").trim() + File.separator + "images" + File.separator
                 + "clients" + File.separator + resourceId;
     }
@@ -148,17 +158,22 @@ public class FileSystemContentRepository implements ContentRepository {
      * Recursively create the directory if it does not exist.
      */
     private void makeDirectories(final String uploadDocumentLocation) throws IOException {
-        Files.createParentDirs(new File(uploadDocumentLocation));
+        String sanitizedPath = pathSanitizer.sanitize(uploadDocumentLocation);
+        Files.createParentDirs(new File(sanitizedPath));
     }
 
-    private void writeFileToFileSystem(final String fileName, final InputStream uploadedInputStream, final String fileLocation) {
+
+    private String writeFileToFileSystem(final String fileName, final InputStream uploadedInputStream, final String fileLocation) {
+
         try (BufferedInputStream bis = new BufferedInputStream(uploadedInputStream)) {
             String sanitizedPath = pathSanitizer.sanitize(fileLocation, bis);
             makeDirectories(sanitizedPath);
             FileUtils.copyInputStreamToFile(bis, new File(sanitizedPath)); // NOSONAR
+
+            return sanitizedPath;
+
         } catch (final IOException ioException) {
-            LOG.warn("writeFileToFileSystem() IOException (logged because cause is not propagated in ContentManagementException)",
-                    ioException);
+            log.warn("Failed to write file!", ioException);
             throw new ContentManagementException(fileName, ioException.getMessage(), ioException);
         }
     }

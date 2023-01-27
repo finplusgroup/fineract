@@ -24,6 +24,7 @@ import com.google.gson.JsonObject;
 import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Collection;
@@ -105,8 +106,8 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
 
             String partSql = " aud.id as id, aud.action_name as actionName, aud.entity_name as entityName,"
                     + " aud.resource_id as resourceId, aud.subresource_id as subresourceId,aud.client_id as clientId, aud.loan_id as loanId,"
-                    + " mk.username as maker, aud.made_on_date as madeOnDate, " + " aud.api_get_url as resourceGetUrl, "
-                    + "ck.username as checker, aud.checked_on_date as checkedOnDate, ev.enum_message_property as processingResult "
+                    + " mk.username as maker, aud.made_on_date as madeOnDate, aud.made_on_date_utc as madeOnDateUTC, aud.api_get_url as resourceGetUrl, "
+                    + "ck.username as checker, aud.checked_on_date as checkedOnDate, aud.checked_on_date_utc as checkedOnDateUTC,  ev.enum_message_property as processingResult "
                     + commandAsJsonString + ", "
                     + " o.name as officeName, gl.level_name as groupLevelName, g.display_name as groupName, c.display_name as clientName, "
                     + " l.account_no as loanAccountNo, s.account_no as savingsAccountNo " + " from m_portfolio_command_source aud "
@@ -114,7 +115,7 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
                     + " left join m_office o on o.id = aud.office_id" + " left join m_group g on g.id = aud.group_id"
                     + " left join m_group_level gl on gl.id = g.level_id" + " left join m_client c on c.id = aud.client_id"
                     + " left join m_loan l on l.id = aud.loan_id" + " left join m_savings_account s on s.id = aud.savings_account_id"
-                    + " left join r_enum_value ev on ev.enum_name = 'processing_result_enum' and ev.enum_id = aud.processing_result_enum";
+                    + " left join r_enum_value ev on ev.enum_name = 'status' and ev.enum_id = aud.status";
 
             // data scoping: head office (hierarchy = ".") can see all audit
             // entries
@@ -136,9 +137,11 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
             final Long loanId = JdbcSupport.getLong(rs, "loanId");
             final Long subresourceId = JdbcSupport.getLong(rs, "subresourceId");
             final String maker = rs.getString("maker");
-            final ZonedDateTime madeOnDate = JdbcSupport.getDateTime(rs, "madeOnDate");
+            final ZonedDateTime madeOnDateTenant = JdbcSupport.getDateTime(rs, "madeOnDate");
+            final OffsetDateTime madeOnDateUTC = JdbcSupport.getOffsetDateTime(rs, "madeOnDateUTC");
             final String checker = rs.getString("checker");
-            final ZonedDateTime checkedOnDate = JdbcSupport.getDateTime(rs, "checkedOnDate");
+            final ZonedDateTime checkedOnDateTenant = JdbcSupport.getDateTime(rs, "checkedOnDate");
+            final OffsetDateTime checkedOnDateUTC = JdbcSupport.getOffsetDateTime(rs, "checkedOnDateUTC");
             final String processingResult = rs.getString("processingResult");
             final String resourceGetUrl = rs.getString("resourceGetUrl");
             String commandAsJson;
@@ -155,6 +158,9 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
             final String clientName = rs.getString("clientName");
             final String loanAccountNo = rs.getString("loanAccountNo");
             final String savingsAccountNo = rs.getString("savingsAccountNo");
+
+            ZonedDateTime madeOnDate = madeOnDateUTC != null ? madeOnDateUTC.toZonedDateTime() : madeOnDateTenant;
+            ZonedDateTime checkedOnDate = checkedOnDateUTC != null ? checkedOnDateUTC.toZonedDateTime() : checkedOnDateTenant;
 
             return new AuditData(id, actionName, entityName, resourceId, subresourceId, maker, madeOnDate, checker, checkedOnDate,
                     processingResult, commandAsJson, officeName, groupLevelName, groupName, clientName, loanAccountNo, savingsAccountNo,
@@ -193,14 +199,14 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
             this.columnValidator.validateSqlInjection(sqlBuilder.toString(), parameters.limitSql());
         }
 
-        log.info("sql: {}", sqlBuilder);
+        log.debug("sql: {}", sqlBuilder);
 
         return this.paginationHelper.fetchPage(this.jdbcTemplate, sqlBuilder.toString(), extraCriteria.getArguments(), rm);
     }
 
     @Override
     public Collection<AuditData> retrieveAllEntriesToBeChecked(final SQLBuilder extraCriteria, final boolean includeJson) {
-        extraCriteria.addCriteria("aud.processing_result_enum = ", 2);
+        extraCriteria.addCriteria("aud.status = ", 2);
         return retrieveEntries("makerchecker", extraCriteria, " order by aud.id, mk.username", includeJson);
     }
 
@@ -232,7 +238,7 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
         }
         sql += extraCriteria.getSQLTemplate();
         sql += groupAndOrderBySQL;
-        log.info("sql: {}", sql);
+        log.debug("sql: {}", sql);
 
         return this.jdbcTemplate.query(sql, rm, extraCriteria.getArguments()); // NOSONAR
     }
@@ -270,7 +276,7 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
             if (StringUtils.isNotBlank(officeIdStr)) {
                 officeId = Long.valueOf(officeIdStr);
                 final OfficeData office = this.officeReadPlatformService.retrieveOffice(officeId);
-                commandAsJsonMap.put("officeName", office.name());
+                commandAsJsonMap.put("officeName", office.getName());
             } else {
                 commandAsJsonMap.put("officeName", "");
             }
@@ -284,7 +290,7 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
             if (StringUtils.isNotBlank(clientIdStr)) {
                 clientId = Long.valueOf(clientIdStr);
                 final ClientData client = this.clientReadPlatformService.retrieveOne(clientId);
-                commandAsJsonMap.put("clientName", client.displayName());
+                commandAsJsonMap.put("clientName", client.getDisplayName());
             } else {
                 commandAsJsonMap.put("clientName", "");
             }
@@ -362,7 +368,7 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
                     commandAsJsonMap.remove(typeName);
 
                     final Integer enumTypeId = auditObject.get(typeName).getAsInt();
-                    final String code = LoanEnumerations.loanEnumueration(typeName, enumTypeId).getValue();
+                    final String code = LoanEnumerations.loanEnumeration(typeName, enumTypeId).getValue();
                     if (code != null) {
                         commandAsJsonMap.put(typeName, code);
                     }
@@ -485,13 +491,13 @@ public class AuditReadPlatformServiceImpl implements AuditReadPlatformService {
         @Override
         public ProcessingResultLookup mapRow(final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
             final Long id = JdbcSupport.getLong(rs, "id");
-            final String processingResult = rs.getString("processingResult");
+            final String status = rs.getString("status");
 
-            return new ProcessingResultLookup(id, processingResult);
+            return new ProcessingResultLookup(id, status);
         }
 
         public String schema() {
-            return " select enum_id as id, enum_message_property as processingResult from r_enum_value where enum_name = 'processing_result_enum' "
+            return " select enum_id as id, enum_message_property as status from r_enum_value where enum_name = 'status' "
                     + " order by enum_id";
         }
     }

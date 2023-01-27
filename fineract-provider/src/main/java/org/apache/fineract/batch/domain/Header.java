@@ -21,6 +21,7 @@ package org.apache.fineract.batch.domain;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 /**
  * Provides an object to handle HTTP headers as name and value pairs for Batch API. It is used in {@link BatchRequest}
@@ -34,6 +35,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Data
+@Accessors(chain = true)
 public class Header {
 
     private String name;

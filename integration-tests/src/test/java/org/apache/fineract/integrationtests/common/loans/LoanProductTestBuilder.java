@@ -40,11 +40,11 @@ public class LoanProductTestBuilder {
     private static final String EQUAL_INSTALLMENTS = "1";
     private static final String DECLINING_BALANCE = "0";
     private static final String FLAT_BALANCE = "1";
-    public static final String DEFAULT_STRATEGY = "1";
-    public static final String INTEREST_PRINCIPAL_PENALTIES_FEES_ORDER_STRATEGY = "6";
-    // private static final String HEAVENS_FAMILY_STRATEGY ="2";
-    // private static final String CREO_CORE_STRATEGY ="3";
-    public static final String RBI_INDIA_STRATEGY = "4";
+    public static final String DEFAULT_STRATEGY = "mifos-standard-strategy";
+    public static final String INTEREST_PRINCIPAL_PENALTIES_FEES_ORDER_STRATEGY = "interest-principal-penalties-fees-order-strategy";
+    // private static final String HEAVENS_FAMILY_STRATEGY ="heavensfamily-strategy";
+    // private static final String CREO_CORE_STRATEGY ="creocore-strategy";
+    public static final String RBI_INDIA_STRATEGY = "rbi-india-strategy";
 
     public static final String RECALCULATION_FREQUENCY_TYPE_SAME_AS_REPAYMENT_PERIOD = "1";
     public static final String RECALCULATION_FREQUENCY_TYPE_DAILY = "2";
@@ -83,13 +83,17 @@ public class LoanProductTestBuilder {
     private String overdueDaysForNPA = "5";
     private String interestCalculationPeriodType = CALCULATION_PERIOD_SAME_AS_REPAYMENT_PERIOD;
     private String inArrearsTolerance = "0";
-    private String transactionProcessingStrategy = DEFAULT_STRATEGY;
+    private String transactionProcessingStrategyCode = DEFAULT_STRATEGY;
     private String accountingRule = NONE;
     private final String currencyCode = USD;
     private String amortizationType = EQUAL_INSTALLMENTS;
     private String minPrincipal = "1000.00";
     private String maxPrincipal = "10000000.00";
     private Account[] accountList = null;
+
+    private List<Map<String, Long>> feeToIncomeAccountMappings = null;
+    private List<Map<String, Long>> penaltyToIncomeAccountMappings = null;
+    private Account feeAndPenaltyAssetAccount;
 
     private Boolean multiDisburseLoan = false;
     private final String outstandingLoanBalance = "35000";
@@ -98,6 +102,7 @@ public class LoanProductTestBuilder {
     private Boolean allowApprovedDisbursedAmountsOverApplied = false;
     private String overAppliedCalculationType = null;
     private Integer overAppliedNumber = null;
+    private Boolean isEqualAmortization = false;
 
     private Boolean isInterestRecalculationEnabled = false;
     private String daysInYearType = "1";
@@ -130,8 +135,15 @@ public class LoanProductTestBuilder {
     private boolean syncExpectedWithDisbursementDate = false;
     private String fixedPrincipalPercentagePerInstallment;
     private String installmentAmountInMultiplesOf;
+    private boolean canDefineInstallmentAmount;
+    private Integer delinquencyBucketId;
 
     public String build(final String chargeId) {
+        final HashMap<String, Object> map = build(chargeId, null);
+        return new Gson().toJson(map);
+    }
+
+    public HashMap<String, Object> build(final String chargeId, final Integer delinquencyBucketId) {
         final HashMap<String, Object> map = new HashMap<>();
 
         if (chargeId != null) {
@@ -159,10 +171,11 @@ public class LoanProductTestBuilder {
         map.put("interestType", this.interestType);
         map.put("interestCalculationPeriodType", this.interestCalculationPeriodType);
         map.put("inArrearsTolerance", this.inArrearsTolerance);
-        map.put("transactionProcessingStrategyId", this.transactionProcessingStrategy);
+        map.put("transactionProcessingStrategyCode", this.transactionProcessingStrategyCode);
         map.put("accountingRule", this.accountingRule);
         map.put("minPrincipal", this.minPrincipal);
         map.put("maxPrincipal", this.maxPrincipal);
+        map.put("isEqualAmortization", this.isEqualAmortization);
         map.put("overdueDaysForNPA", this.overdueDaysForNPA);
         if (this.minimumDaysBetweenDisbursalAndFirstRepayment != null) {
             map.put("minimumDaysBetweenDisbursalAndFirstRepayment", this.minimumDaysBetweenDisbursalAndFirstRepayment);
@@ -178,7 +191,9 @@ public class LoanProductTestBuilder {
                 map.put("overAppliedNumber", this.overAppliedNumber);
             }
         }
-
+        if (this.canDefineInstallmentAmount) {
+            map.put("canDefineInstallmentAmount", this.canDefineInstallmentAmount);
+        }
         if (multiDisburseLoan) {
             map.put("multiDisburseLoan", this.multiDisburseLoan);
             map.put("maxTrancheCount", this.maxTrancheCount);
@@ -186,7 +201,7 @@ public class LoanProductTestBuilder {
         }
 
         if (this.accountingRule.equals(ACCRUAL_UPFRONT) || this.accountingRule.equals(ACCRUAL_PERIODIC)) {
-            map.putAll(getAccountMappingForAccrualBased());
+            map.putAll(getAccountMappingForAccrualBased(this.feeAndPenaltyAssetAccount));
         } else if (this.accountingRule.equals(CASH_BASED)) {
             map.putAll(getAccountMappingForCashBased());
         }
@@ -234,11 +249,33 @@ public class LoanProductTestBuilder {
         if (installmentAmountInMultiplesOf != null) {
             map.put("installmentAmountInMultiplesOf", this.installmentAmountInMultiplesOf);
         }
-        return new Gson().toJson(map);
+
+        // Delinquency Bucket
+        if (delinquencyBucketId != null) {
+            map.put("delinquencyBucketId", delinquencyBucketId);
+        }
+
+        if (this.delinquencyBucketId != null) {
+            map.put("delinquencyBucketId", this.delinquencyBucketId);
+        }
+
+        if (this.feeToIncomeAccountMappings != null) {
+            map.put("feeToIncomeAccountMappings", this.feeToIncomeAccountMappings);
+        }
+        if (this.penaltyToIncomeAccountMappings != null) {
+            map.put("penaltyToIncomeAccountMappings", this.penaltyToIncomeAccountMappings);
+        }
+
+        return map;
     }
 
     public LoanProductTestBuilder withInstallmentAmountInMultiplesOf(String installmentAmountInMultiplesOf) {
         this.installmentAmountInMultiplesOf = installmentAmountInMultiplesOf;
+        return this;
+    }
+
+    public LoanProductTestBuilder withDelinquencyBucket(Integer delinquencyBucketId) {
+        this.delinquencyBucketId = delinquencyBucketId;
         return this;
     }
 
@@ -371,12 +408,17 @@ public class LoanProductTestBuilder {
         return this;
     }
 
+    public LoanProductTestBuilder withEqualAmortization(boolean isEqualAmortization) {
+        this.isEqualAmortization = isEqualAmortization;
+        return this;
+    }
+
     public LoanProductTestBuilder withMultiDisburse() {
         this.multiDisburseLoan = true;
         return this;
     }
 
-    public LoanProductTestBuilder withDisallowExpectectedDisbursements(boolean disallowExpectectedDisbursements) {
+    public LoanProductTestBuilder withDisallowExpectedDisbursements(boolean disallowExpectectedDisbursements) {
         this.disallowExpectedDisbursements = disallowExpectectedDisbursements;
         if (this.disallowExpectedDisbursements) {
             this.allowApprovedDisbursedAmountsOverApplied = true;
@@ -415,7 +457,7 @@ public class LoanProductTestBuilder {
         return map;
     }
 
-    private Map<String, String> getAccountMappingForAccrualBased() {
+    private Map<String, String> getAccountMappingForAccrualBased(Account feeAndPenaltyAssetAccount) {
         final Map<String, String> map = new HashMap<>();
         for (int i = 0; i < this.accountList.length; i++) {
             if (this.accountList[i].getAccountType().equals(Account.AccountType.ASSET)) {
@@ -423,9 +465,14 @@ public class LoanProductTestBuilder {
                 map.put("fundSourceAccountId", ID);
                 map.put("loanPortfolioAccountId", ID);
                 map.put("transfersInSuspenseAccountId", ID);
+                if (feeAndPenaltyAssetAccount != null) {
+                    map.put("receivableFeeAccountId", feeAndPenaltyAssetAccount.getAccountID().toString());
+                    map.put("receivablePenaltyAccountId", feeAndPenaltyAssetAccount.getAccountID().toString());
+                } else {
+                    map.put("receivableFeeAccountId", ID);
+                    map.put("receivablePenaltyAccountId", ID);
+                }
                 map.put("receivableInterestAccountId", ID);
-                map.put("receivableFeeAccountId", ID);
-                map.put("receivablePenaltyAccountId", ID);
 
             }
             if (this.accountList[i].getAccountType().equals(Account.AccountType.INCOME)) {
@@ -455,6 +502,11 @@ public class LoanProductTestBuilder {
         return this;
     }
 
+    public LoanProductTestBuilder withDefineInstallmentAmount(final boolean canDefineInstallmentAmount) {
+        this.canDefineInstallmentAmount = canDefineInstallmentAmount;
+        return this;
+    }
+
     public LoanProductTestBuilder currencyDetails(final String digitsAfterDecimal, final String inMultiplesOf) {
         this.digitsAfterDecimal = digitsAfterDecimal;
         this.inMultiplesOf = inMultiplesOf;
@@ -462,7 +514,7 @@ public class LoanProductTestBuilder {
     }
 
     public LoanProductTestBuilder withRepaymentStrategy(final String transactionProcessingStrategy) {
-        this.transactionProcessingStrategy = transactionProcessingStrategy;
+        this.transactionProcessingStrategyCode = transactionProcessingStrategy;
         return this;
     }
 
@@ -561,4 +613,30 @@ public class LoanProductTestBuilder {
         return this;
     }
 
+    public LoanProductTestBuilder withFeeToIncomeAccountMapping(final Long chargeId, final Long accountId) {
+        if (this.feeToIncomeAccountMappings == null) {
+            this.feeToIncomeAccountMappings = new ArrayList<>();
+        }
+        Map<String, Long> newMap = new HashMap<>();
+        newMap.put("chargeId", chargeId);
+        newMap.put("incomeAccountId", accountId);
+        this.feeToIncomeAccountMappings.add(newMap);
+        return this;
+    }
+
+    public LoanProductTestBuilder withPenaltyToIncomeAccountMapping(final Long chargeId, final Long accountId) {
+        if (this.penaltyToIncomeAccountMappings == null) {
+            this.penaltyToIncomeAccountMappings = new ArrayList<>();
+        }
+        Map<String, Long> newMap = new HashMap<>();
+        newMap.put("chargeId", chargeId);
+        newMap.put("incomeAccountId", accountId);
+        this.penaltyToIncomeAccountMappings.add(newMap);
+        return this;
+    }
+
+    public LoanProductTestBuilder withFeeAndPenaltyAssetAccount(final Account account) {
+        this.feeAndPenaltyAssetAccount = account;
+        return this;
+    }
 }

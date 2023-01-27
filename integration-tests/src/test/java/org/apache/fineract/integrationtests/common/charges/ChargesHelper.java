@@ -23,6 +23,10 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
 import java.util.HashMap;
+import org.apache.fineract.client.models.PostChargesRequest;
+import org.apache.fineract.client.models.PostChargesResponse;
+import org.apache.fineract.client.util.JSON;
+import org.apache.fineract.integrationtests.client.IntegrationTest;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
@@ -30,9 +34,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @SuppressWarnings({ "rawtypes", "unchecked" })
-public final class ChargesHelper {
+public final class ChargesHelper extends IntegrationTest {
 
-    private ChargesHelper() {
+    public ChargesHelper() {
 
     }
 
@@ -82,6 +86,8 @@ public final class ChargesHelper {
     private static final String CURRENCY_CODE = "USD";
     public static final String FEE_ON_MONTH_DAY = "04 March";
     private static final String MONTH_DAY_FORMAT = "dd MMM";
+
+    private static final Gson GSON = new JSON().getGson();
 
     public static String getSavingsSpecifiedDueDateJSON() {
         final HashMap<String, Object> map = populateDefaultsForSavings();
@@ -302,7 +308,7 @@ public final class ChargesHelper {
         return chargesCreateJson;
     }
 
-    public static String getLoanOverdueFeeJSONWithCalculattionTypePercentage(String penaltyPercentageAmount) {
+    public static String getLoanOverdueFeeJSONWithCalculationTypePercentage(String penaltyPercentageAmount) {
         final HashMap<String, Object> map = populateDefaultsForLoan();
         map.put("penalty", ChargesHelper.PENALTY);
         map.put("amount", penaltyPercentageAmount);
@@ -385,6 +391,12 @@ public final class ChargesHelper {
         return Utils.performServerPost(requestSpec, responseSpec, CREATE_CHARGES_URL, request, "resourceId");
     }
 
+    public static PostChargesResponse createLoanCharge(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
+            final String payload) {
+        final String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_CHARGES_URL, payload, null);
+        return GSON.fromJson(response, PostChargesResponse.class);
+    }
+
     public static ArrayList<HashMap> getCharges(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         return (ArrayList) Utils.performServerGet(requestSpec, responseSpec, CHARGES_URL + "?" + Utils.TENANT_IDENTIFIER, "");
     }
@@ -415,7 +427,7 @@ public final class ChargesHelper {
     public static String getModifyChargeJSON() {
         final HashMap<String, Object> map = new HashMap<>();
         map.put("locale", CommonConstants.LOCALE);
-        map.put("amount", "200.0");
+        map.put("amount", 200.0);
         String json = new Gson().toJson(map);
         LOG.info("{}", json);
         return json;
@@ -511,5 +523,9 @@ public final class ChargesHelper {
         return Utils.performServerPost(requestSpec, responseSpec, CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, json,
                 "status");
 
+    }
+
+    public PostChargesResponse createCharges(PostChargesRequest request) {
+        return ok(fineract().charges.createCharge(request));
     }
 }

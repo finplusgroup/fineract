@@ -29,25 +29,28 @@ import java.util.Locale;
 import java.util.Map;
 import javax.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
+import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
+import org.apache.fineract.infrastructure.event.business.BusinessEventListener;
+import org.apache.fineract.infrastructure.event.business.domain.loan.LoanAdjustTransactionBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.LoanApprovedBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.LoanUndoApprovalBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.LoanUndoDisbursalBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanTransactionMakeRepaymentPostBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanUndoWrittenOffBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanWrittenOffPostBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.service.BusinessEventNotifierService;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.data.AccountTransferDTO;
 import org.apache.fineract.portfolio.account.domain.AccountTransferDetails;
 import org.apache.fineract.portfolio.account.domain.AccountTransferType;
 import org.apache.fineract.portfolio.account.service.AccountTransfersWritePlatformService;
-import org.apache.fineract.portfolio.businessevent.BusinessEventListener;
-import org.apache.fineract.portfolio.businessevent.domain.loan.LoanAdjustTransactionBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.LoanApprovedBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.LoanUndoApprovalBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.LoanUndoDisbursalBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.transaction.LoanTransactionMakeRepaymentPostBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.transaction.LoanUndoWrittenOffBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.domain.loan.transaction.LoanWrittenOffPostBusinessEvent;
-import org.apache.fineract.portfolio.businessevent.service.BusinessEventNotifierService;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanTransaction;
 import org.apache.fineract.portfolio.loanaccount.guarantor.GuarantorConstants;
@@ -80,6 +83,8 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
     private final DepositAccountOnHoldTransactionRepository depositAccountOnHoldTransactionRepository;
     private final Map<Long, Long> releaseLoanIds = new HashMap<>(2);
     private final SavingsAccountAssembler savingsAccountAssembler;
+    private final ConfigurationDomainService configurationDomainService;
+    private final ExternalIdFactory externalIdFactory;
 
     @PostConstruct
     public void addListeners() {
@@ -99,7 +104,7 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
     @Override
     public void validateGuarantorBusinessRules(Loan loan) {
         LoanProduct loanProduct = loan.loanProduct();
-        BigDecimal principal = loan.getPrincpal().getAmount();
+        BigDecimal principal = loan.getPrincipal().getAmount();
         if (loanProduct.isHoldGuaranteeFundsEnabled()) {
             LoanProductGuaranteeDetails guaranteeData = loanProduct.getLoanProductGuaranteeDetails();
             final List<Guarantor> existGuarantorList = this.guarantorRepository.findByLoan(loan);
@@ -204,7 +209,7 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
      * account to loan account and releases guarantor)
      */
     @Override
-    public void transaferFundsFromGuarantor(final Loan loan) {
+    public void transferFundsFromGuarantor(final Loan loan) {
         if (loan.getGuaranteeAmount().compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
@@ -227,7 +232,6 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
         final AccountTransferDetails accountTransferDetails = null;
         final String noteText = null;
 
-        final String txnExternalId = null;
         final SavingsAccount toSavingsAccount = null;
 
         Long loanId = loan.getId();
@@ -241,15 +245,15 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
                     releaseLoanIds.put(loanId, guarantorFundingDetails.getId());
                     try {
                         BigDecimal remainingAmount = guarantorFundingDetails.getAmountRemaining();
-                        if (loan.getGuaranteeAmount().compareTo(loan.getPrincpal().getAmount()) > 0) {
-                            remainingAmount = remainingAmount.multiply(loan.getPrincpal().getAmount()).divide(loan.getGuaranteeAmount(),
+                        if (loan.getGuaranteeAmount().compareTo(loan.getPrincipal().getAmount()) > 0) {
+                            remainingAmount = remainingAmount.multiply(loan.getPrincipal().getAmount()).divide(loan.getGuaranteeAmount(),
                                     MoneyHelper.getRoundingMode());
                         }
+                        ExternalId externalId = externalIdFactory.create();
                         AccountTransferDTO accountTransferDTO = new AccountTransferDTO(transactionDate, remainingAmount, fromAccountType,
                                 toAccountType, fromAccountId, toAccountId, description, locale, fmt, paymentDetail, fromTransferType,
-                                toTransferType, chargeId, loanInstallmentNumber, transferType, accountTransferDetails, noteText,
-                                txnExternalId, loan, toSavingsAccount, fromSavingsAccount, isRegularTransaction,
-                                isExceptionForBalanceCheck);
+                                toTransferType, chargeId, loanInstallmentNumber, transferType, accountTransferDetails, noteText, externalId,
+                                loan, toSavingsAccount, fromSavingsAccount, isRegularTransaction, isExceptionForBalanceCheck);
                         transferAmount(accountTransferDTO);
                     } finally {
                         releaseLoanIds.remove(loanId);
@@ -393,7 +397,7 @@ public class GuarantorDomainServiceImpl implements GuarantorDomainService {
 
             BigDecimal amountForRelease = loanTransaction.getPrincipalPortion();
             BigDecimal totalGuaranteeAmount = loan.getGuaranteeAmount();
-            BigDecimal principal = loan.getPrincpal().getAmount();
+            BigDecimal principal = loan.getPrincipal().getAmount();
             if ((amountForRelease != null) && (totalGuaranteeAmount != null)) {
                 amountForRelease = amountForRelease.multiply(totalGuaranteeAmount).divide(principal, MoneyHelper.getRoundingMode());
                 List<DepositAccountOnHoldTransaction> accountOnHoldTransactions = new ArrayList<>();

@@ -37,7 +37,7 @@ configurations {
     driver
 }
 dependencies {
-    driver 'mysql:mysql-connector-java:8.0.29'
+    driver 'mysql:mysql-connector-java:8.0.32'
 }
 
 cargo {
@@ -51,13 +51,13 @@ cargo {
 
     local {
         logLevel = 'low'
-        // outputFile = file('build/output.log')
+        outputFile = file("$buildDir/cargo/integration-tests-output.log")
         installer {
             installConfiguration = configurations.tomcat
             downloadDir = file("$buildDir/download")
-            extractDir = file("$buildDir/tomcat")
+            extractDir = file("$buildDir/tomcat-integration-tests")
         }
-        startStopTimeout = 240000
+        startStopTimeout = 300000
         sharedClasspath = configurations.driver
         containerProperties {
             def jvmArgs = '--add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.security=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.management/javax.management=ALL-UNNAMED --add-opens=java.naming/javax.naming=ALL-UNNAMED '
@@ -75,7 +75,7 @@ cargo {
             } else {
                 jvmArgs += '-Dspring.datasource.hikari.driverClassName=org.mariadb.jdbc.Driver -Dspring.datasource.hikari.jdbcUrl=jdbc:mariadb://localhost:3306/fineract_tenants -Dspring.datasource.hikari.username=root -Dspring.datasource.hikari.password=mysql -Dfineract.tenant.host=localhost -Dfineract.tenant.port=3306 -Dfineract.tenant.username=root -Dfineract.tenant.password=mysql'
             }
-            jvmArgs += ' -Dspring.profiles.active=test'
+            jvmArgs += ' -Dspring.profiles.active=test -Dfineract.events.external.enabled=true'
             property 'cargo.start.jvmargs', jvmArgs
             property 'cargo.tomcat.connector.keystoreFile', file("$rootDir/fineract-provider/src/main/resources/keystore.jks")
             property 'cargo.tomcat.connector.keystorePass', 'openmf'

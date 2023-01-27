@@ -26,6 +26,7 @@ apply plugin: 'com.gorylenko.gradle-git-properties'
 apply plugin: 'io.swagger.core.v3.swagger-gradle-plugin'
 apply plugin: 'com.google.cloud.tools.jib'
 
+check.dependsOn('cucumber')
 
 compileJava.doLast {
     def mainSS = sourceSets.main
@@ -149,9 +150,9 @@ configurations {
     driver
 }
 dependencies {
-    driver 'org.mariadb.jdbc:mariadb-java-client:2.7.6'
-    driver 'org.postgresql:postgresql:42.4.0'
-    driver 'mysql:mysql-connector-java:8.0.29'
+    driver 'org.mariadb.jdbc:mariadb-java-client'
+    driver 'org.postgresql:postgresql'
+    driver 'mysql:mysql-connector-java:8.0.31'
 }
 
 URLClassLoader loader = GroovyObject.class.classLoader
@@ -163,7 +164,7 @@ task createDB {
     description= "Creates the MariaDB Database. Needs database name to be passed (like: -PdbName=someDBname)"
     doLast {
         def sql = Sql.newInstance( 'jdbc:mariadb://localhost:3306/', mysqlUser, mysqlPassword, 'org.mariadb.jdbc.Driver' )
-        sql.execute( 'create database '+"`$dbName`" )
+        sql.execute( 'CREATE DATABASE '+"`$dbName` CHARACTER SET utf8mb4" )
     }
 }
 
@@ -195,7 +196,7 @@ task createMySQLDB {
     description= "Creates the MySQL Database. Needs database name to be passed (like: -PdbName=someDBname)"
     doLast {
         def sql = Sql.newInstance( 'jdbc:mysql://localhost:3306/', mysqlUser, mysqlPassword, 'com.mysql.cj.jdbc.Driver' )
-        sql.execute( 'create database '+"`$dbName`" )
+        sql.execute( 'CREATE DATABASE '+"`$dbName` CHARACTER SET utf8mb4" )
     }
 }
 
@@ -221,8 +222,8 @@ bootRun {
     ]
 
     dependencies {
-        implementation 'org.mariadb.jdbc:mariadb-java-client:2.7.6'
-        implementation 'org.postgresql:postgresql:42.4.0'
+        implementation 'org.mariadb.jdbc:mariadb-java-client'
+        implementation 'org.postgresql:postgresql'
     }
 }
 
@@ -255,6 +256,7 @@ jib {
     container {
         creationTime = 'USE_CURRENT_TIMESTAMP'
         mainClass = 'org.apache.fineract.ServerApplication'
+        extraClasspath = ['/app/plugins/*']
         jvmFlags = [
             '-Xms1G',
             '-XshowSettings:vm',
@@ -285,8 +287,8 @@ jib {
     allowInsecureRegistries = true
 
     dependencies {
-        implementation 'org.mariadb.jdbc:mariadb-java-client:2.7.6'
-        implementation 'org.postgresql:postgresql:42.4.0'
+        implementation 'org.mariadb.jdbc:mariadb-java-client'
+        implementation 'org.postgresql:postgresql'
     }
 
     pluginExtensions {
@@ -297,6 +299,26 @@ jib {
                     filter {
                         glob = '/app/resources/**'
                     }
+                }
+            }
+        }
+    }
+}
+
+task migrateDatabase {
+    doFirst {
+        println 'Executing liquibase database migration to version '+"$dbVersion"
+
+        def dbUrl='jdbc:'+"$dbType"+'://'+"$dbHost"+':'+"$dbPort"+'/'+"$dbName"
+        def changeLogFilePath='fineract-provider/src/main/resources/db/changelog/tenant/upgrades/0000_upgrade_to_'+"$dbVersion"+'.xml'
+
+        liquibase {
+            activities {
+                main {
+                    changeLogFile changeLogFilePath
+                    url dbUrl
+                    username project.ext.mysqlUser
+                    password project.ext.mysqlPassword
                 }
             }
         }
@@ -324,5 +346,5 @@ checkstyleMain.dependsOn resolve
 checkstyleTest.dependsOn resolve
 rat.dependsOn prepareInputYaml
 spotbugsTest.dependsOn resolve
-compileTestJava.dependsOn ':fineract-client:processResources'
+compileTestJava.dependsOn ':fineract-client:processResources', ':fineract-avro-schemas:processResources'
 bootJarMainClassName.dependsOn resolve
