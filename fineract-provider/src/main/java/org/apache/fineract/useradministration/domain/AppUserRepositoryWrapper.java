@@ -34,9 +34,9 @@ public class AppUserRepositoryWrapper {
     }
 
     public AppUser fetchSystemUser() {
-        AppUser user = this.appUserRepository.findAppUserByName("finplus");
+        AppUser user = this.appUserRepository.findAppUserByName(AppUserConstants.SYSTEM_USER_NAME);
         if (user == null) {
-            throw new UserNotFoundException("finplus");
+            throw new UserNotFoundException(AppUserConstants.SYSTEM_USER_NAME);
         }
         return user;
     }
