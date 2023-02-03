@@ -704,7 +704,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
         }
         this.loanTransactions.addAll(changedTransactionDetail.getNewTransactionMappings().values());
         updateLoanSummaryDerivedFields();
-        this.loanTransactions.removeAll(changedTransactionDetail.getNewTransactionMappings().values());
         return changedTransactionDetail;
     }
 
@@ -3326,9 +3325,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             }
         }
 
-        if (changedTransactionDetail != null) {
-            this.loanTransactions.removeAll(changedTransactionDetail.getNewTransactionMappings().values());
-        }
         return changedTransactionDetail;
     }
 
@@ -3408,7 +3404,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
         return transactions;
     }
 
-    public List<LoanTransaction> retrieveListOfTransactionsByType(LoanTransactionType transactionType) {
+    public List<LoanTransaction> retrieveListOfTransactionsByType(final LoanTransactionType transactionType) {
         final List<LoanTransaction> transactions = new ArrayList<>();
         for (final LoanTransaction transaction : this.loanTransactions) {
             if (transaction.isNotReversed() && transaction.getTypeOf().equals(transactionType)) {
@@ -4157,10 +4153,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
         }
         return expectedDisbursementDate;
     }
-
-    /*
-     * Reason for derving
-     */
 
     public BigDecimal getDisburseAmountForTemplate() {
         BigDecimal principal = this.loanRepaymentScheduleDetail.getPrincipal().getAmount();
@@ -5205,6 +5197,16 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
         return currentDisbursementDetails;
     }
 
+    public LoanDisbursementDetails getDisbursementDetails(final LocalDate transactionDate, final BigDecimal transactionAmount) {
+        for (LoanDisbursementDetails disbursementDetail : this.disbursementDetails) {
+            if (!disbursementDetail.isReversed() && disbursementDetail.getDisbursementDate().equals(transactionDate)
+                    && (disbursementDetail.principal().compareTo(transactionAmount) == 0)) {
+                return disbursementDetail;
+            }
+        }
+        return null;
+    }
+
     public ChangedTransactionDetail updateDisbursementDateAndAmountForTranche(final LoanDisbursementDetails disbursementDetails,
             final JsonCommand command, final Map<String, Object> actualChanges, final ScheduleGeneratorDTO scheduleGeneratorDTO) {
         final Locale locale = command.extractLocale();
@@ -5384,8 +5386,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
          */
         this.loanTransactions.addAll(changedTransactionDetail.getNewTransactionMappings().values());
         updateLoanSummaryDerivedFields();
-
-        this.loanTransactions.removeAll(changedTransactionDetail.getNewTransactionMappings().values());
 
         return changedTransactionDetail;
     }
@@ -6301,42 +6301,48 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             List<Long> existingReversedTransactionIds, Loan loan) {
 
         validateAccountStatus(LoanEvent.LOAN_DISBURSAL_UNDO_LAST);
+        validateActivityNotBeforeClientOrGroupTransferDate(LoanEvent.LOAN_DISBURSAL_UNDO_LAST, getDisbursementDate());
+
+        final Map<String, Object> actualChanges = new LinkedHashMap<>();
+        List<LoanTransaction> loanTransactions = retrieveListOfTransactionsByType(LoanTransactionType.DISBURSEMENT);
+        loanTransactions.sort(Comparator.comparing(LoanTransaction::getId));
+        final LoanTransaction lastDisbursalTransaction = loanTransactions.get(loanTransactions.size() - 1);
+        final LocalDate lastTransactionDate = lastDisbursalTransaction.getTransactionDate();
+
         existingTransactionIds.addAll(findExistingTransactionIds());
         existingReversedTransactionIds.addAll(findExistingReversedTransactionIds());
-        final Map<String, Object> actualChanges = new LinkedHashMap<>();
-        validateActivityNotBeforeClientOrGroupTransferDate(LoanEvent.LOAN_DISBURSAL_UNDO_LAST, getDisbursementDate());
-        LocalDate actualDisbursementDate = null;
-        LocalDate lastTransactionDate = getDisbursementDate();
-        List<LoanTransaction> loanTransactions = retrieveListOfTransactionsExcludeAccruals();
+
+        loanTransactions = retrieveListOfTransactionsExcludeAccruals();
         Collections.reverse(loanTransactions);
         for (final LoanTransaction previousTransaction : loanTransactions) {
             if (lastTransactionDate.isBefore(previousTransaction.getTransactionDate())
                     && (previousTransaction.isRepaymentType() || previousTransaction.isWaiver() || previousTransaction.isChargePayment())) {
                 throw new UndoLastTrancheDisbursementException(previousTransaction.getId());
             }
-            if (previousTransaction.isDisbursement()) {
-                lastTransactionDate = previousTransaction.getTransactionDate();
+            if (previousTransaction.getId().compareTo(lastDisbursalTransaction.getId()) < 0) {
                 break;
             }
         }
-        actualDisbursementDate = lastTransactionDate;
-        updateLoanToLastDisbursalState(actualDisbursementDate);
+        final LoanDisbursementDetails disbursementDetail = loan.getDisbursementDetails(lastTransactionDate,
+                lastDisbursalTransaction.getAmount());
+        updateLoanToLastDisbursalState(disbursementDetail);
         for (Iterator<LoanTermVariations> iterator = this.loanTermVariations.iterator(); iterator.hasNext();) {
             LoanTermVariations loanTermVariations = iterator.next();
-            if ((loanTermVariations.getTermType().isDueDateVariation()
-                    && loanTermVariations.fetchDateValue().isAfter(actualDisbursementDate))
+            if ((loanTermVariations.getTermType().isDueDateVariation() && loanTermVariations.fetchDateValue().isAfter(lastTransactionDate))
                     || (loanTermVariations.getTermType().isEMIAmountVariation()
-                            && loanTermVariations.getTermApplicableFrom().compareTo(actualDisbursementDate) == 0 ? Boolean.TRUE
+                            && loanTermVariations.getTermApplicableFrom().compareTo(lastTransactionDate) == 0 ? Boolean.TRUE
                                     : Boolean.FALSE)
-                    || loanTermVariations.getTermApplicableFrom().isAfter(actualDisbursementDate)) {
+                    || loanTermVariations.getTermApplicableFrom().isAfter(lastTransactionDate)) {
                 iterator.remove();
             }
         }
-        reverseExistingTransactionsTillLastDisbursal(actualDisbursementDate);
+        reverseExistingTransactionsTillLastDisbursal(lastDisbursalTransaction);
         loan.recalculateScheduleFromLastTransaction(scheduleGeneratorDTO, existingTransactionIds, existingReversedTransactionIds);
         actualChanges.put("undolastdisbursal", "true");
         actualChanges.put("disbursedAmount", this.getDisbursedAmount());
         updateLoanSummaryDerivedFields();
+
+        doPostLoanTransactionChecks(getLastUserTransactionDate(), loanLifecycleStateMachine);
 
         return actualChanges;
     }
@@ -6344,38 +6350,32 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
     /**
      * Reverse only disbursement, accruals, and repayments at disbursal transactions
      *
-     * @param actualDisbursementDate
+     * @param lastDisbursalTransaction
      * @return
      */
-    public List<LoanTransaction> reverseExistingTransactionsTillLastDisbursal(LocalDate actualDisbursementDate) {
-        final List<LoanTransaction> reversedTransactions = new ArrayList<>();
+    public void reverseExistingTransactionsTillLastDisbursal(LoanTransaction lastDisbursalTransaction) {
         for (final LoanTransaction transaction : this.loanTransactions) {
-            if ((actualDisbursementDate.equals(transaction.getTransactionDate())
-                    || actualDisbursementDate.isBefore(transaction.getTransactionDate()))
+            if ((transaction.getTransactionDate().compareTo(lastDisbursalTransaction.getTransactionDate()) >= 0)
+                    && (transaction.getId().compareTo(lastDisbursalTransaction.getId()) >= 0)
                     && transaction.isAllowTypeTransactionAtTheTimeOfLastUndo()) {
-                reversedTransactions.add(transaction);
                 transaction.reverse();
             }
         }
-        return reversedTransactions;
     }
 
-    private void updateLoanToLastDisbursalState(LocalDate actualDisbursementDate) {
+    private void updateLoanToLastDisbursalState(LoanDisbursementDetails disbursementDetail) {
 
         for (final LoanCharge charge : getActiveCharges()) {
             if (charge.isOverdueInstallmentCharge()) {
                 charge.setActive(false);
-            } else if (charge.isTrancheDisbursementCharge() && actualDisbursementDate
+            } else if (charge.isTrancheDisbursementCharge() && disbursementDetail.getDisbursementDate()
                     .equals(charge.getTrancheDisbursementCharge().getloanDisbursementDetails().actualDisbursementDate())) {
                 charge.resetToOriginal(loanCurrency());
             }
         }
-        for (final LoanDisbursementDetails details : getDisbursementDetails()) {
-            if (actualDisbursementDate.equals(details.actualDisbursementDate())) {
-                this.loanRepaymentScheduleDetail.setPrincipal(getDisbursedAmount().subtract(details.principal()));
-                details.updateActualDisbursementDate(null);
-            }
-        }
+        this.loanRepaymentScheduleDetail.setPrincipal(getDisbursedAmount().subtract(disbursementDetail.principal()));
+        disbursementDetail.updateActualDisbursementDate(null);
+        disbursementDetail.reverse();
         updateLoanSummaryDerivedFields();
     }
 
