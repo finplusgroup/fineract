@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Embedded;
@@ -1346,8 +1347,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             }
             installment.updateAccrualPortion(interest, fee, penality);
         }
-        LoanRepaymentScheduleInstallment lastInstallment = getRepaymentScheduleInstallments()
-                .get(getRepaymentScheduleInstallments().size() - 1);
+        LoanRepaymentScheduleInstallment lastInstallment = getLastLoanRepaymentScheduleInstallment();
         for (LoanTransaction loanTransaction : accruals) {
             if (loanTransaction.getTransactionDate().isAfter(lastInstallment.getDueDate()) && !loanTransaction.isReversed()) {
                 loanTransaction.reverse();
@@ -3447,10 +3447,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             }
         }
         if (isAllChargesPaid) {
-            loanLifecycleStateMachine.transition(LoanEvent.REPAID_IN_FULL, this);
-
             this.closedOnDate = transactionDate;
             this.actualMaturityDate = transactionDate;
+            loanLifecycleStateMachine.transition(LoanEvent.REPAID_IN_FULL, this);
+
         } else if (LoanStatus.fromInt(this.loanStatus).isOverpaid()) {
             if (this.totalOverpaid == null || BigDecimal.ZERO.compareTo(this.totalOverpaid) == 0) {
                 this.overpaidOnDate = null;
@@ -3504,6 +3504,39 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             }
         }
         updateLoanOutstandingBalances();
+    }
+
+    public void applyIncomeAccrualTransaction(LocalDate closedDate) {
+        ExternalId externalId = ExternalId.empty();
+        boolean isExternalIdAutoGenerationEnabled = TemporaryConfigurationServiceContainer.isExternalIdAutoGenerationEnabled();
+        if (isPeriodicAccrualAccountingEnabledOnLoanProduct()) {
+            List<LoanTransaction> updatedAccrualTransactions = retrieveListOfAccrualTransactions();
+            LocalDate lastAccruedDate = this.getDisbursementDate();
+            if (!updatedAccrualTransactions.isEmpty()) {
+                lastAccruedDate = updatedAccrualTransactions.get(updatedAccrualTransactions.size() - 1).getTransactionDate();
+            }
+            HashMap<String, Object> feeDetails = new HashMap<>();
+            determineFeeDetails(lastAccruedDate, closedDate, feeDetails);
+            if (isExternalIdAutoGenerationEnabled) {
+                externalId = ExternalId.generate();
+            }
+            BigDecimal fee = (BigDecimal) feeDetails.get(FEE);
+            if (fee == null) {
+                fee = BigDecimal.ZERO;
+            }
+            BigDecimal penalty = (BigDecimal) feeDetails.get(PENALTIES);
+            if (penalty == null) {
+                penalty = BigDecimal.ZERO;
+            }
+            BigDecimal total = fee.add(penalty);
+            // TODO: calculate interest?
+            if (total.compareTo(BigDecimal.ZERO) > 0) {
+                LoanTransaction accrualTransaction = LoanTransaction.accrueTransaction(this, this.getOffice(), closedDate, total, null, fee,
+                        penalty, externalId);
+                updateLoanChargesPaidBy(accrualTransaction, feeDetails, null);
+                addLoanTransaction(accrualTransaction);
+            }
+        }
     }
 
     private void determineCumulativeIncomeFromInstallments(HashMap<String, BigDecimal> cumulativeIncomeFromInstallments) {
@@ -3765,9 +3798,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             if (loanTransaction.isReversed()) {
                 continue;
             }
-            if ((loanTransaction.isRefund() || loanTransaction.isRefundForActiveLoan() || loanTransaction.isCreditBalanceRefund()
-                    || loanTransaction.isChargeback())) {
+            if (loanTransaction.isRefund() || loanTransaction.isRefundForActiveLoan()) {
                 totalPaidInRepayments = totalPaidInRepayments.minus(loanTransaction.getAmount(currency));
+            } else if (loanTransaction.isCreditBalanceRefund() || loanTransaction.isChargeback()) {
+                totalPaidInRepayments = totalPaidInRepayments.minus(loanTransaction.getOverPaymentPortion(currency));
             }
         }
 
@@ -3797,6 +3831,10 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
         validateAccountStatus(LoanEvent.WRITE_OFF_OUTSTANDING);
 
+        final LocalDate writtenOffOnLocalDate = command.localDateValueOfParameterNamed(TRANSACTION_DATE);
+        this.closedOnDate = writtenOffOnLocalDate;
+        this.writtenOffOnDate = writtenOffOnLocalDate;
+        this.closedBy = currentUser;
         final LoanStatus statusEnum = loanLifecycleStateMachine.dryTransition(LoanEvent.WRITE_OFF_OUTSTANDING, this);
 
         LoanTransaction loanTransaction = null;
@@ -3807,7 +3845,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             existingTransactionIds.addAll(findExistingTransactionIds());
             existingReversedTransactionIds.addAll(findExistingReversedTransactionIds());
 
-            final LocalDate writtenOffOnLocalDate = command.localDateValueOfParameterNamed(TRANSACTION_DATE);
             final String txnExternalId = command.stringValueOfParameterNamedAllowingNull(EXTERNAL_ID);
 
             ExternalId externalId = ExternalIdFactory.produce(txnExternalId);
@@ -3816,9 +3853,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
                 externalId = ExternalId.generate();
             }
 
-            this.closedOnDate = writtenOffOnLocalDate;
-            this.writtenOffOnDate = writtenOffOnLocalDate;
-            this.closedBy = currentUser;
             changes.put(CLOSED_ON_DATE, command.stringValueOfParameterNamed(TRANSACTION_DATE));
             changes.put(WRITTEN_OFF_ON_DATE, command.stringValueOfParameterNamed(TRANSACTION_DATE));
             changes.put("externalId", externalId);
@@ -3934,12 +3968,12 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             final Money totalOutstanding = this.summary.getTotalOutstanding(loanCurrency());
             if (totalOutstanding.isGreaterThanZero() && getInArrearsTolerance().isGreaterThanOrEqualTo(totalOutstanding)) {
 
+                this.closedOnDate = closureDate;
                 final LoanStatus statusEnum = loanLifecycleStateMachine.dryTransition(LoanEvent.REPAID_IN_FULL, this);
                 if (!statusEnum.hasStateOf(LoanStatus.fromInt(this.loanStatus))) {
                     loanLifecycleStateMachine.transition(LoanEvent.REPAID_IN_FULL, this);
                     changes.put(PARAM_STATUS, LoanEnumerations.status(this.loanStatus));
                 }
-                this.closedOnDate = closureDate;
                 changes.put("externalId", externalId);
                 loanTransaction = LoanTransaction.writeoff(this, getOffice(), closureDate, externalId);
                 final boolean isLastTransaction = isChronologicallyLatestTransaction(loanTransaction, getLoanTransactions());
@@ -3965,14 +3999,13 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             final Money totalLoanOverpayment = calculateTotalOverpayment();
             if (totalLoanOverpayment.isGreaterThanZero() && getInArrearsTolerance().isGreaterThanOrEqualTo(totalLoanOverpayment)) {
                 // TODO - KW - technically should set somewhere that this loan
-                // has
-                // 'overpaid' amount
+                // has 'overpaid' amount
+                this.closedOnDate = closureDate;
                 final LoanStatus statusEnum = loanLifecycleStateMachine.dryTransition(LoanEvent.REPAID_IN_FULL, this);
                 if (!statusEnum.hasStateOf(LoanStatus.fromInt(this.loanStatus))) {
                     loanLifecycleStateMachine.transition(LoanEvent.REPAID_IN_FULL, this);
                     changes.put(PARAM_STATUS, LoanEnumerations.status(this.loanStatus));
                 }
-                this.closedOnDate = closureDate;
             } else if (totalLoanOverpayment.isGreaterThanZero()) {
                 final String errorMessage = "The loan is marked as 'Overpaid' and cannot be moved to 'Closed (obligations met).";
                 throw new InvalidLoanStateTransitionException("close", "loan.is.overpaid", errorMessage, totalLoanOverpayment.toString());
@@ -3995,13 +4028,13 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
         final LocalDate rescheduledOn = command.localDateValueOfParameterNamed(TRANSACTION_DATE);
 
+        this.closedOnDate = rescheduledOn;
         final LoanStatus statusEnum = loanLifecycleStateMachine.dryTransition(LoanEvent.LOAN_RESCHEDULE, this);
         if (!statusEnum.hasStateOf(LoanStatus.fromInt(this.loanStatus))) {
             loanLifecycleStateMachine.transition(LoanEvent.LOAN_RESCHEDULE, this);
             changes.put(PARAM_STATUS, LoanEnumerations.status(this.loanStatus));
         }
 
-        this.closedOnDate = rescheduledOn;
         this.rescheduledOnDate = rescheduledOn;
         changes.put(CLOSED_ON_DATE, command.stringValueOfParameterNamed(TRANSACTION_DATE));
         changes.put("rescheduledOnDate", command.stringValueOfParameterNamed(TRANSACTION_DATE));
@@ -5772,7 +5805,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
             if (loanTransaction.isDisbursement() || loanTransaction.isIncomePosting()) {
                 outstanding = outstanding.plus(loanTransaction.getAmount(getCurrency()));
                 loanTransaction.updateOutstandingLoanBalance(outstanding.getAmount());
-            } else if (loanTransaction.isChargeback()) {
+            } else if (loanTransaction.isChargeback() || loanTransaction.isCreditBalanceRefund()) {
                 Money transactionOutstanding = loanTransaction.getAmount(getCurrency());
                 if (!loanTransaction.getOverPaymentPortion(getCurrency()).isZero()) {
                     transactionOutstanding = loanTransaction.getAmount(getCurrency())
@@ -6121,6 +6154,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
         if (this.totalOverpaid == null || BigDecimal.ZERO.compareTo(this.totalOverpaid) == 0) {
             this.overpaidOnDate = null;
+            this.closedOnDate = newCreditBalanceRefundTransaction.getTransactionDate();
             defaultLoanLifecycleStateMachine.transition(LoanEvent.LOAN_CREDIT_BALANCE_REFUND, this);
         }
 
@@ -6244,9 +6278,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
         final LoanRepaymentScheduleTransactionProcessor loanRepaymentScheduleTransactionProcessor = this.transactionProcessorFactory
                 .determineProcessor(this.transactionProcessingStrategyCode);
         final Money overpaidAmount = calculateTotalOverpayment(); // Before Transaction
-        if (overpaidAmount.isGreaterThanZero()) {
-            chargebackTransaction.setOverPayments(overpaidAmount);
-        }
 
         if (chargebackTransaction.isNotZero(loanCurrency())) {
             addLoanTransaction(chargebackTransaction);
@@ -6983,6 +7014,14 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
     public boolean isChargedOff() {
         return this.chargedOff;
+    }
+
+    public LoanRepaymentScheduleInstallment getLastLoanRepaymentScheduleInstallment() {
+        return getRepaymentScheduleInstallments().get(getRepaymentScheduleInstallments().size() - 1);
+    }
+
+    public List<LoanTransaction> getLoanTransactions(Predicate<LoanTransaction> predicate) {
+        return getLoanTransactions().stream().filter(predicate).toList();
     }
 
 }
