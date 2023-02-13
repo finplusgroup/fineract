@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.accounting.glaccount.domain.GLAccountType;
 import org.apache.fineract.client.models.BusinessDateRequest;
+import org.apache.fineract.client.models.GetJournalEntriesTransactionIdResponse;
 import org.apache.fineract.client.models.GetLoanTransactionRelation;
 import org.apache.fineract.client.models.GetLoansLoanIdLoanTransactionRelation;
 import org.apache.fineract.client.models.GetLoansLoanIdRepaymentPeriod;
@@ -60,6 +61,7 @@ import org.apache.fineract.client.models.GetLoansLoanIdResponse;
 import org.apache.fineract.client.models.GetLoansLoanIdSummary;
 import org.apache.fineract.client.models.GetLoansLoanIdTransactions;
 import org.apache.fineract.client.models.GetLoansLoanIdTransactionsTransactionIdResponse;
+import org.apache.fineract.client.models.JournalEntryTransactionItem;
 import org.apache.fineract.client.models.PostChargesRequest;
 import org.apache.fineract.client.models.PostChargesResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
@@ -6167,7 +6169,8 @@ public class ClientLoanIntegrationTest {
 
             String externalId = UUID.randomUUID().toString();
             PostLoansLoanIdChargesChargeIdResponse chargeAdjustmentResponse = this.loanTransactionHelper.chargeAdjustment((long) loanID,
-                    (long) penalty1LoanChargeId, new PostLoansLoanIdChargesChargeIdRequest().amount(10.0).externalId(externalId));
+                    (long) penalty1LoanChargeId,
+                    new PostLoansLoanIdChargesChargeIdRequest().amount(10.0).externalId(externalId).paymentTypeId(1L));
 
             loanSchedule = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec, loanID);
             assertEquals(2, loanSchedule.size());
@@ -6194,6 +6197,7 @@ public class ClientLoanIntegrationTest {
             assertEquals(chargeAdjustmentResponse.getSubResourceId(), transactionRelation.getFromLoanTransaction());
             assertEquals((long) penalty1LoanChargeId, transactionRelation.getToLoanCharge());
             assertEquals("CHARGE_ADJUSTMENT", transactionRelation.getRelationType());
+            assertEquals(1L, chargeAdjustmentTransaction.getPaymentDetailData().getPaymentType().getId());
 
             PostLoansLoanIdTransactionsResponse repaymentResult = loanTransactionHelper.makeLoanRepayment((long) loanID,
                     new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("06 September 2022").locale("en")
@@ -7175,7 +7179,7 @@ public class ClientLoanIntegrationTest {
             assertTrue(loanDetails.getStatus().getOverpaid());
 
             this.loanTransactionHelper.makeCreditBalanceRefund((long) loanID, new PostLoansLoanIdTransactionsRequest()
-                    .transactionAmount(200.0).transactionDate("10 October 2022").dateFormat("dd MMMM yyyy").locale("en"));
+                    .transactionAmount(200.0).transactionDate("10 October 2022").dateFormat("dd MMMM yyyy").locale("en").paymentTypeId(1L));
 
             loanDetails = this.loanTransactionHelper.getLoanDetails((long) loanID);
             assertTrue(loanDetails.getStatus().getClosedObligationsMet());
@@ -7196,6 +7200,18 @@ public class ClientLoanIntegrationTest {
             assertEquals(200.0, loanDetails.getTransactions().get(3).getOverpaymentPortion());
             assertEquals(LocalDate.of(2022, 10, 10), loanDetails.getTransactions().get(3).getDate());
             assertEquals(0.0, loanDetails.getTransactions().get(3).getOutstandingLoanBalance());
+            assertEquals(1L, loanDetails.getTransactions().get(3).getPaymentDetailData().getPaymentType().getId());
+            GetJournalEntriesTransactionIdResponse journalEntriesForTransaction = journalEntryHelper
+                    .getJournalEntries("L" + loanDetails.getTransactions().get(3).getId());
+            List<JournalEntryTransactionItem> journalItems = journalEntriesForTransaction.getPageItems();
+            assertEquals(2, journalItems.size());
+            assertEquals(200.0,
+                    journalItems.stream()
+                            .filter(j -> "DEBIT".equalsIgnoreCase(j.getEntryType().getValue())
+                                    && j.getGlAccountId().equals(overpaymentAccount.getAccountID().longValue()))
+                            .findFirst().get().getAmount());
+            assertEquals(200.0, journalItems.stream().filter(j -> "CREDIT".equalsIgnoreCase(j.getEntryType().getValue())
+                    && j.getGlAccountId().equals(assetAccount.getAccountID().longValue())).findFirst().get().getAmount());
 
             this.loanTransactionHelper.reverseLoanTransaction(loanDetails.getId(), loanDetails.getTransactions().get(1).getId(),
                     new PostLoansLoanIdTransactionsTransactionIdRequest().dateFormat("dd MMMM yyyy").transactionAmount(0.0)
@@ -7231,6 +7247,25 @@ public class ClientLoanIntegrationTest {
             assertFalse(loanDetails.getRepaymentSchedule().getPeriods().get(2).getComplete());
             assertEquals(100.0, loanDetails.getRepaymentSchedule().getPeriods().get(2).getPrincipalPaid());
             assertEquals(100.0, loanDetails.getRepaymentSchedule().getPeriods().get(2).getPrincipalOutstanding());
+
+            journalEntriesForTransaction = journalEntryHelper.getJournalEntries("L" + loanDetails.getTransactions().get(3).getId());
+            journalItems = journalEntriesForTransaction.getPageItems();
+            assertEquals(3, journalItems.size());
+            assertEquals(1,
+                    journalItems.stream().filter(item -> item.getAmount() == 200.0d)
+                            .filter(j -> "CREDIT".equalsIgnoreCase(j.getEntryType().getValue())
+                                    && j.getGlAccountId().equals(assetAccount.getAccountID().longValue()))
+                            .count());
+            assertEquals(1,
+                    journalItems.stream().filter(item -> item.getAmount() == 100.0d)
+                            .filter(j -> "DEBIT".equalsIgnoreCase(j.getEntryType().getValue())
+                                    && j.getGlAccountId().equals(overpaymentAccount.getAccountID().longValue()))
+                            .count());
+            assertEquals(1,
+                    journalItems.stream().filter(item -> item.getAmount() == 100.0d)
+                            .filter(j -> "DEBIT".equalsIgnoreCase(j.getEntryType().getValue())
+                                    && j.getGlAccountId().equals(assetAccount.getAccountID().longValue()))
+                            .count());
 
         } finally {
             GlobalConfigurationHelper.updateIsAutomaticExternalIdGenerationEnabled(this.requestSpec, this.responseSpec, false);

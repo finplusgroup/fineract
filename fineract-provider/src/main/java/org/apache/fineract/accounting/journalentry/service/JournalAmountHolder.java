@@ -16,19 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.cob;
+package org.apache.fineract.accounting.journalentry.service;
 
-import java.util.Set;
-import java.util.TreeMap;
-import org.apache.fineract.cob.data.BusinessStepNameAndOrder;
-import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
-import org.jetbrains.annotations.NotNull;
+import java.math.BigDecimal;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-public interface COBBusinessStepService {
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class JournalAmountHolder {
 
-    <T extends COBBusinessStep<S>, S extends AbstractPersistableCustom> S run(TreeMap<Long, String> executionMap, S item);
-
-    @NotNull
-    <T extends COBBusinessStep<S>, S extends AbstractPersistableCustom> Set<BusinessStepNameAndOrder> getCOBBusinessSteps(
-            Class<T> businessStepClass, String cobJobName);
+    private Integer accountType;
+    private BigDecimal amount;
 }

@@ -3509,7 +3509,11 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
     public void applyIncomeAccrualTransaction(LocalDate closedDate) {
         ExternalId externalId = ExternalId.empty();
         boolean isExternalIdAutoGenerationEnabled = TemporaryConfigurationServiceContainer.isExternalIdAutoGenerationEnabled();
-        if (isPeriodicAccrualAccountingEnabledOnLoanProduct()) {
+        if (isPeriodicAccrualAccountingEnabledOnLoanProduct()
+                // to avoid collision with processIncomeAccrualTransactionOnLoanClosure()
+                // TODO: review after interest calculation implemented
+                && !(this.loanInterestRecalculationDetails != null
+                        && this.loanInterestRecalculationDetails.isCompoundingToBePostedAsTransaction())) {
             List<LoanTransaction> updatedAccrualTransactions = retrieveListOfAccrualTransactions();
             LocalDate lastAccruedDate = this.getDisbursementDate();
             if (!updatedAccrualTransactions.isEmpty()) {
@@ -4970,12 +4974,11 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
     }
 
     public LoanTransaction getLastRepaymentTransaction() {
-        for (final LoanTransaction loanTransaction : this.loanTransactions) {
-            if (!loanTransaction.isReversed() && loanTransaction.isRepaymentType()) {
-                return loanTransaction;
-            }
-        }
-        return null;
+        return loanTransactions.stream() //
+                .filter(loanTransaction -> !loanTransaction.isReversed()) //
+                .filter(LoanTransaction::isRepaymentType) //
+                .reduce((first, second) -> second) //
+                .orElse(null);
     }
 
     public LocalDate getLastUserTransactionForChargeCalc() {
@@ -6267,8 +6270,6 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
     public void handleChargebackTransaction(final LoanTransaction chargebackTransaction,
             final LoanLifecycleStateMachine loanLifecycleStateMachine) {
-
-        chargebackTransaction.updateLoan(this);
 
         if (!chargebackTransaction.isChargeback()) {
             final String errorMessage = "A transaction of type chargeback was expected but not received.";
