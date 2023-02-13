@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -96,18 +96,18 @@ public class LoanSummaryData {
     private BigDecimal currentBalance;
 
     public LoanSummaryData(final CurrencyData currency, final BigDecimal principalDisbursed, final BigDecimal principalAdjustments,
-            final BigDecimal principalPaid, final BigDecimal principalWrittenOff, final BigDecimal principalOutstanding,
-            final BigDecimal principalOverdue, final BigDecimal interestCharged, final BigDecimal interestPaid,
-            final BigDecimal interestWaived, final BigDecimal interestWrittenOff, final BigDecimal interestOutstanding,
-            final BigDecimal interestOverdue, final BigDecimal feeChargesCharged, final BigDecimal feeChargesDueAtDisbursementCharged,
-            final BigDecimal feeChargesPaid, final BigDecimal feeChargesWaived, final BigDecimal feeChargesWrittenOff,
-            final BigDecimal feeChargesOutstanding, final BigDecimal feeChargesOverdue, final BigDecimal penaltyChargesCharged,
-            final BigDecimal penaltyChargesPaid, final BigDecimal penaltyChargesWaived, final BigDecimal penaltyChargesWrittenOff,
-            final BigDecimal penaltyChargesOutstanding, final BigDecimal penaltyChargesOverdue, final BigDecimal totalExpectedRepayment,
-            final BigDecimal totalRepayment, final BigDecimal totalExpectedCostOfLoan, final BigDecimal totalCostOfLoan,
-            final BigDecimal totalWaived, final BigDecimal totalWrittenOff, final BigDecimal totalOutstanding,
-            final BigDecimal totalOverdue, final LocalDate overdueSinceDate, final Long writeoffReasonId, final String writeoffReason,
-            final BigDecimal totalRecovered, final Long chargeOffReasonId, final String chargeOffReason) {
+                           final BigDecimal principalPaid, final BigDecimal principalWrittenOff, final BigDecimal principalOutstanding,
+                           final BigDecimal principalOverdue, final BigDecimal interestCharged, final BigDecimal interestPaid,
+                           final BigDecimal interestWaived, final BigDecimal interestWrittenOff, final BigDecimal interestOutstanding,
+                           final BigDecimal interestOverdue, final BigDecimal feeChargesCharged, final BigDecimal feeChargesDueAtDisbursementCharged,
+                           final BigDecimal feeChargesPaid, final BigDecimal feeChargesWaived, final BigDecimal feeChargesWrittenOff,
+                           final BigDecimal feeChargesOutstanding, final BigDecimal feeChargesOverdue, final BigDecimal penaltyChargesCharged,
+                           final BigDecimal penaltyChargesPaid, final BigDecimal penaltyChargesWaived, final BigDecimal penaltyChargesWrittenOff,
+                           final BigDecimal penaltyChargesOutstanding, final BigDecimal penaltyChargesOverdue, final BigDecimal totalExpectedRepayment,
+                           final BigDecimal totalRepayment, final BigDecimal totalExpectedCostOfLoan, final BigDecimal totalCostOfLoan,
+                           final BigDecimal totalWaived, final BigDecimal totalWrittenOff, final BigDecimal totalOutstanding,
+                           final BigDecimal totalOverdue, final LocalDate overdueSinceDate, final Long writeoffReasonId, final String writeoffReason,
+                           final BigDecimal totalRecovered, final Long chargeOffReasonId, final String chargeOffReason) {
         this.currency = currency;
         this.principalDisbursed = principalDisbursed;
         this.principalAdjustments = principalAdjustments;
@@ -151,7 +151,7 @@ public class LoanSummaryData {
     }
 
     public static LoanSummaryData withTransactionAmountsSummary(final LoanSummaryData defaultSummaryData,
-            final Collection<LoanTransactionData> loanTransactions) {
+                                                                final Collection<LoanTransactionData> loanTransactions) {
 
         BigDecimal totalMerchantRefund = BigDecimal.ZERO;
         BigDecimal totalMerchantRefundReversed = BigDecimal.ZERO;
@@ -189,10 +189,10 @@ public class LoanSummaryData {
             totalRepaymentTransaction = computeTotalAmountForNonReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
             totalRepaymentTransactionReversed = computeTotalAmountForReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
 
-            for(LoanTransactionData k : loanTransactions){
-                if(k.getReversalExternalId() == null && (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual"))){
+            for (LoanTransactionData k : loanTransactions) {
+                if ((Objects.equals(k.getType().getValue(), "Repayment") && k.getReversalExternalId() == null) || Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
                     currentKeBalance = currentKeBalance.add(k.getAmount());
-                }else{
+                } else {
                     currentKeBalance = currentKeBalance.subtract(k.getAmount());
                 }
             }
@@ -213,28 +213,28 @@ public class LoanSummaryData {
                 defaultSummaryData.totalOutstanding, defaultSummaryData.totalOverdue, defaultSummaryData.overdueSinceDate,
                 defaultSummaryData.writeoffReasonId, defaultSummaryData.writeoffReason, defaultSummaryData.totalRecovered,
                 defaultSummaryData.chargeOffReasonId, defaultSummaryData.chargeOffReason).setTotalMerchantRefund(totalMerchantRefund)
-                        .setTotalMerchantRefundReversed(totalMerchantRefundReversed).setTotalPayoutRefund(totalPayoutRefund)
-                        .setTotalPayoutRefundReversed(totalPayoutRefundReversed).setTotalGoodwillCredit(totalGoodwillCredit)
-                        .setTotalGoodwillCreditReversed(totalGoodwillCreditReversed).setTotalChargeAdjustment(totalChargeAdjustment)
-                        .setTotalChargeAdjustmentReversed(totalChargeAdjustmentReversed).setTotalChargeback(totalChargeback)
-                        .setTotalCreditBalanceRefund(totalCreditBalanceRefund)
-                        .setTotalCreditBalanceRefundReversed(totalCreditBalanceRefundReversed)
-                        .setTotalRepaymentTransaction(totalRepaymentTransaction)
-                        .setTotalRepaymentTransactionReversed(totalRepaymentTransactionReversed)
-                        .setCurrentBalance(currentKeBalance);
+                .setTotalMerchantRefundReversed(totalMerchantRefundReversed).setTotalPayoutRefund(totalPayoutRefund)
+                .setTotalPayoutRefundReversed(totalPayoutRefundReversed).setTotalGoodwillCredit(totalGoodwillCredit)
+                .setTotalGoodwillCreditReversed(totalGoodwillCreditReversed).setTotalChargeAdjustment(totalChargeAdjustment)
+                .setTotalChargeAdjustmentReversed(totalChargeAdjustmentReversed).setTotalChargeback(totalChargeback)
+                .setTotalCreditBalanceRefund(totalCreditBalanceRefund)
+                .setTotalCreditBalanceRefundReversed(totalCreditBalanceRefundReversed)
+                .setTotalRepaymentTransaction(totalRepaymentTransaction)
+                .setTotalRepaymentTransactionReversed(totalRepaymentTransactionReversed)
+                .setCurrentBalance(currentKeBalance);
     }
 
     private static BigDecimal computeTotalAmountForReversedTransactions(LoanTransactionType transactionType,
-            Collection<LoanTransactionData> loanTransactions) {
+                                                                        Collection<LoanTransactionData> loanTransactions) {
         return loanTransactions.stream().filter(
-                transaction -> transaction.getType().getCode().equals(transactionType.getCode()) && transaction.getReversedOnDate() != null)
+                        transaction -> transaction.getType().getCode().equals(transactionType.getCode()) && transaction.getReversedOnDate() != null)
                 .map(txn -> txn.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private static BigDecimal computeTotalAmountForNonReversedTransactions(LoanTransactionType transactionType,
-            Collection<LoanTransactionData> loanTransactions) {
+                                                                           Collection<LoanTransactionData> loanTransactions) {
         return loanTransactions.stream().filter(
-                transaction -> transaction.getType().getCode().equals(transactionType.getCode()) && transaction.getReversedOnDate() == null)
+                        transaction -> transaction.getType().getCode().equals(transactionType.getCode()) && transaction.getReversedOnDate() == null)
                 .map(txn -> txn.getAmount()).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }
