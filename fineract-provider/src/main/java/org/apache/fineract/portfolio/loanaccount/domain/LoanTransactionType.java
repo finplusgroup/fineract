@@ -69,6 +69,10 @@ public enum LoanTransactionType {
         this.code = code;
     }
 
+    public static boolean isIncreasingLoan(final Integer i){
+        return i == 1 || i == 10;
+    }
+
     public static LoanTransactionType fromInt(final Integer transactionType) {
 
         if (transactionType == null) {

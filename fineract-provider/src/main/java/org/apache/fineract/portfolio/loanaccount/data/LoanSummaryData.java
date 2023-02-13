@@ -90,6 +90,9 @@ public class LoanSummaryData {
     private final Long chargeOffReasonId;
     private final String chargeOffReason;
 
+    // Current balance as per Kenya
+    private BigDecimal currentBalance;
+
     public LoanSummaryData(final CurrencyData currency, final BigDecimal principalDisbursed, final BigDecimal principalAdjustments,
             final BigDecimal principalPaid, final BigDecimal principalWrittenOff, final BigDecimal principalOutstanding,
             final BigDecimal principalOverdue, final BigDecimal interestCharged, final BigDecimal interestPaid,
@@ -161,6 +164,7 @@ public class LoanSummaryData {
         BigDecimal totalCreditBalanceRefundReversed = BigDecimal.ZERO;
         BigDecimal totalRepaymentTransaction = BigDecimal.ZERO;
         BigDecimal totalRepaymentTransactionReversed = BigDecimal.ZERO;
+        BigDecimal currentKeBalance = BigDecimal.ZERO;
 
         if (!CollectionUtils.isEmpty(loanTransactions)) {
 
@@ -182,6 +186,14 @@ public class LoanSummaryData {
                     loanTransactions);
             totalRepaymentTransaction = computeTotalAmountForNonReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
             totalRepaymentTransactionReversed = computeTotalAmountForReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
+
+            for(LoanTransactionData k : loanTransactions){
+                if(LoanTransactionType.isIncreasingLoan(LoanTransactionType.valueOf(k.getTransactionType()).getValue())){
+                    currentKeBalance = currentKeBalance.add(k.getAmount());
+                }else{
+                    currentKeBalance = currentKeBalance.subtract(k.getAmount());
+                }
+            }
         }
 
         return new LoanSummaryData(defaultSummaryData.currency, defaultSummaryData.principalDisbursed,
@@ -206,7 +218,8 @@ public class LoanSummaryData {
                         .setTotalCreditBalanceRefund(totalCreditBalanceRefund)
                         .setTotalCreditBalanceRefundReversed(totalCreditBalanceRefundReversed)
                         .setTotalRepaymentTransaction(totalRepaymentTransaction)
-                        .setTotalRepaymentTransactionReversed(totalRepaymentTransactionReversed);
+                        .setTotalRepaymentTransactionReversed(totalRepaymentTransactionReversed)
+                        .setCurrentBalance(currentKeBalance);
     }
 
     private static BigDecimal computeTotalAmountForReversedTransactions(LoanTransactionType transactionType,
