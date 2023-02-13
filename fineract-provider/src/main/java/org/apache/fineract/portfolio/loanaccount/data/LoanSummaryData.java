@@ -189,9 +189,10 @@ public class LoanSummaryData {
 
             for(LoanTransactionData k : loanTransactions){
                 System.out.println("==============================");
-                System.out.println(k.getTransactionType());
+                System.out.println(k.getType());
+                System.out.println(k.getType().getValue());
                 System.out.println("==============================");
-                if(LoanTransactionType.isIncreasingLoan(LoanTransactionType.valueOf(k.getTransactionType()).getValue())){
+                if(LoanTransactionType.isIncreasingLoan(Integer.valueOf(k.getType().getValue()))){
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 }else{
                     currentKeBalance = currentKeBalance.subtract(k.getAmount());
