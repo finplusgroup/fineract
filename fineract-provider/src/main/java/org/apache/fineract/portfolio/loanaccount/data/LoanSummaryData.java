@@ -21,6 +21,8 @@ package org.apache.fineract.portfolio.loanaccount.data;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Objects;
+
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -188,11 +190,7 @@ public class LoanSummaryData {
             totalRepaymentTransactionReversed = computeTotalAmountForReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
 
             for(LoanTransactionData k : loanTransactions){
-                System.out.println("==============================");
-                System.out.println(k.getType());
-                System.out.println(k.getType().getValue());
-                System.out.println("==============================");
-                if(LoanTransactionType.isIncreasingLoan(Integer.valueOf(k.getType().getValue()))){
+                if(Objects.equals(k.getType().getCode(), "Disbursement") || Objects.equals(k.getType().getCode(), "Accrual")){
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 }else{
                     currentKeBalance = currentKeBalance.subtract(k.getAmount());
