@@ -188,6 +188,9 @@ public class LoanSummaryData {
             totalRepaymentTransactionReversed = computeTotalAmountForReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
 
             for(LoanTransactionData k : loanTransactions){
+                System.out.println("==============================");
+                System.out.println(k.getTransactionType());
+                System.out.println("==============================");
                 if(LoanTransactionType.isIncreasingLoan(LoanTransactionType.valueOf(k.getTransactionType()).getValue())){
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 }else{
