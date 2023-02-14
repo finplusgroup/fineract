@@ -23,7 +23,6 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Objects;
 
-import com.google.gson.Gson;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -194,11 +193,6 @@ public class LoanSummaryData {
                 if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 } else {
-                    Gson gson = new Gson();
-                        System.out.println("+++++++++++++++++++++++++++++++++++++++++");
-                        System.out.println(gson.toJson(k));
-                        System.out.println("+++++++++++++++++++++++++++++++++++++++++");
-
                     if(Objects.equals(k.getType().getValue(), "Repayment") && k.getReversalExternalId() == null){
                         currentKeBalance = currentKeBalance.add(k.getAmount());
                     }else {
