@@ -193,6 +193,9 @@ public class LoanSummaryData {
                 if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 } else {
+                    System.out.println("+++++++++++++++++++++++++++++++++++++++++");
+                    System.out.println(k.toString());
+                    System.out.println("+++++++++++++++++++++++++++++++++++++++++");
                     if(Objects.equals(k.getType().getValue(), "Repayment") && k.getReversalExternalId() == null){
                         currentKeBalance = currentKeBalance.add(k.getAmount());
                     }else {
