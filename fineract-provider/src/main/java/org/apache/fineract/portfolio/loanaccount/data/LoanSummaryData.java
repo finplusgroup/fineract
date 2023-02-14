@@ -190,6 +190,9 @@ public class LoanSummaryData {
             totalRepaymentTransactionReversed = computeTotalAmountForReversedTransactions(LoanTransactionType.REPAYMENT, loanTransactions);
 
             for (LoanTransactionData k : loanTransactions) {
+                System.out.println("+++++++++++++++++++++");
+                System.out.println(k.getId()+"   "+(Objects.equals(k.getType().getValue(), "Repayment") && k.getReversedOnDate() != null));
+                System.out.println("+++++++++++++++++++++");
                 if ((Objects.equals(k.getType().getValue(), "Repayment") && k.getReversedOnDate() != null) ||
                         Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
                     currentKeBalance = currentKeBalance.add(k.getAmount());
