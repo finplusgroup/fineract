@@ -26,6 +26,7 @@ import java.util.Objects;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.google.gson.Gson;
 import lombok.Data;
 import lombok.experimental.Accessors;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -196,15 +197,10 @@ public class LoanSummaryData {
                 if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
                     currentKeBalance = currentKeBalance.add(k.getAmount());
                 } else {
-                    ObjectWriter ow = new ObjectMapper().writer().withDefaultPrettyPrinter();
-                    try {
+                    Gson gson = new Gson();
                         System.out.println("+++++++++++++++++++++++++++++++++++++++++");
-                        String json = ow.writeValueAsString(k);
-                        System.out.println(json);
+                        System.out.println(gson.toJson(k));
                         System.out.println("+++++++++++++++++++++++++++++++++++++++++");
-                    } catch (JsonProcessingException e) {
-                        throw new RuntimeException(e);
-                    }
 
                     if(Objects.equals(k.getType().getValue(), "Repayment") && k.getReversalExternalId() == null){
                         currentKeBalance = currentKeBalance.add(k.getAmount());
