@@ -167,8 +167,6 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
     private final LoanTransactionRelationRepository loanTransactionRelationRepository;
     private final LoanTransactionRelationMapper loanTransactionRelationMapper;
 
-    private final LoanReadPlatformService loanReadPlatformService;
-
     @Override
     public LoanAccountData retrieveOne(final Long loanId) {
 
@@ -437,7 +435,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
                 LoanTransactionType.REPAYMENT.getValue(), LoanTransactionType.REPAYMENT.getValue(), loanId, loanId);
         final Collection<PaymentTypeData> paymentOptions = this.paymentTypeReadPlatformService.retrieveAllPaymentTypes();
 
-        final Collection<LoanTransactionData> loanTransactions = this.loanReadPlatformService.retrieveLoanTransactions(loanId);
+        final Collection<LoanTransactionData> loanTransactions = retrieveLoanTransactions(loanId);
         BigDecimal currentKeBalance = BigDecimal.ZERO;
         for (LoanTransactionData k : loanTransactions) {
             if (k.getReversedOnDate() != null) {
