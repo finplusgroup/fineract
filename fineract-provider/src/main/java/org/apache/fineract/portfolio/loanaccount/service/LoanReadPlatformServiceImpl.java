@@ -87,22 +87,7 @@ import org.apache.fineract.portfolio.group.data.GroupGeneralData;
 import org.apache.fineract.portfolio.group.data.GroupRoleData;
 import org.apache.fineract.portfolio.group.service.GroupReadPlatformService;
 import org.apache.fineract.portfolio.loanaccount.api.LoanApiConstants;
-import org.apache.fineract.portfolio.loanaccount.data.DisbursementData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanAccountData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanApplicationTimelineData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanApprovalData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanInterestRecalculationData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanRepaymentScheduleInstallmentData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanScheduleAccrualData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanStatusEnumData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanSummaryData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanTermVariationsData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionEnumData;
-import org.apache.fineract.portfolio.loanaccount.data.LoanTransactionRelationData;
-import org.apache.fineract.portfolio.loanaccount.data.PaidInAdvanceData;
-import org.apache.fineract.portfolio.loanaccount.data.RepaymentScheduleRelatedLoanData;
-import org.apache.fineract.portfolio.loanaccount.data.ScheduleGeneratorDTO;
+import org.apache.fineract.portfolio.loanaccount.data.*;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleTransactionProcessorFactory;
@@ -174,6 +159,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
     private final LoanTransactionRepository loanTransactionRepository;
     private final LoanTransactionRelationRepository loanTransactionRelationRepository;
     private final LoanTransactionRelationMapper loanTransactionRelationMapper;
+    private final LoanChargeReadPlatformService loanChargeReadPlatformService;
 
     @Override
     public LoanAccountData retrieveOne(final Long loanId) {
@@ -445,6 +431,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
 
         final Collection<LoanTransactionData> loanTransactions = retrieveLoanTransactions(loanId);
         BigDecimal currentKeBalance = BigDecimal.ZERO;
+        BigDecimal penalties = BigDecimal.ZERO;
+        BigDecimal fees = BigDecimal.ZERO;
         for (LoanTransactionData k : loanTransactions) {
             if (k.getReversedOnDate() != null) {
             } else if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
@@ -456,7 +444,16 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
 
         BigDecimal interest = currentKeBalance.subtract(loanTransactionData.getPrincipalPortion());
 
-        return LoanTransactionData.templateOnTop1(loanTransactionData, paymentOptions, interest);
+        Collection<LoanChargeData> charges = this.loanChargeReadPlatformService.retrieveLoanCharges(loanId);
+        for(LoanChargeData d : charges){
+            if(d.isPenalty()){
+                penalties = penalties.add(d.getAmountOutstanding());
+            }else{
+                fees = fees.add(d.getAmountOutstanding());
+            }
+        }
+
+        return LoanTransactionData.templateOnTop1(loanTransactionData, paymentOptions, interest, fees, penalties);
     }
 
     @Override
