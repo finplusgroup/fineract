@@ -213,6 +213,19 @@ public class LoanTransactionData {
 
     }
 
+    public static LoanTransactionData templateOnTop1(final LoanTransactionData loanTransactionData,
+                                                    final Collection<PaymentTypeData> paymentTypeOptions, BigDecimal interest) {
+        return new LoanTransactionData(loanTransactionData.id, loanTransactionData.officeId, loanTransactionData.officeName,
+                loanTransactionData.type, loanTransactionData.paymentDetailData, loanTransactionData.currency, loanTransactionData.date,
+                loanTransactionData.amount, loanTransactionData.netDisbursalAmount, loanTransactionData.principalPortion,
+                interest, loanTransactionData.feeChargesPortion, loanTransactionData.penaltyChargesPortion,
+                loanTransactionData.overpaymentPortion, loanTransactionData.unrecognizedIncomePortion, paymentTypeOptions,
+                loanTransactionData.externalId, loanTransactionData.transfer, loanTransactionData.fixedEmiAmount,
+                loanTransactionData.outstandingLoanBalance, loanTransactionData.manuallyReversed, loanTransactionData.loanId,
+                loanTransactionData.externalLoanId);
+
+    }
+
     public LoanTransactionData(final Long id, final Long officeId, final String officeName, final LoanTransactionEnumData transactionType,
             final PaymentDetailData paymentDetailData, final CurrencyData currency, final LocalDate date, final BigDecimal amount,
             final BigDecimal netDisbursalAmount, final BigDecimal principalPortion, final BigDecimal interestPortion,

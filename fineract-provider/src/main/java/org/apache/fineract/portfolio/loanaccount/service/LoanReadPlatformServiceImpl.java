@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
@@ -441,7 +442,21 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
         LoanTransactionData loanTransactionData = this.jdbcTemplate.queryForObject(sql, mapper, // NOSONAR
                 LoanTransactionType.REPAYMENT.getValue(), LoanTransactionType.REPAYMENT.getValue(), loanId, loanId);
         final Collection<PaymentTypeData> paymentOptions = this.paymentTypeReadPlatformService.retrieveAllPaymentTypes();
-        return LoanTransactionData.templateOnTop(loanTransactionData, paymentOptions);
+
+        final Collection<LoanTransactionData> loanTransactions = retrieveLoanTransactions(loanId);
+        BigDecimal currentKeBalance = BigDecimal.ZERO;
+        for (LoanTransactionData k : loanTransactions) {
+            if (k.getReversedOnDate() != null) {
+            } else if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
+                currentKeBalance = currentKeBalance.add(k.getAmount());
+            } else {
+                currentKeBalance = currentKeBalance.subtract(k.getAmount());
+            }
+        }
+
+        BigDecimal interest = currentKeBalance.subtract(loanTransactionData.getPrincipalPortion());
+
+        return LoanTransactionData.templateOnTop1(loanTransactionData, paymentOptions, interest);
     }
 
     @Override
