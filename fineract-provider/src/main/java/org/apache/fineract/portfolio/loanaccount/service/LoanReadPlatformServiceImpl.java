@@ -25,8 +25,16 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
-
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
@@ -448,7 +456,7 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
 
         BigDecimal interest = currentKeBalance.subtract(loanTransactionData.getPrincipalPortion());
 
-        return LoanTransactionData.templateOnTop(loanTransactionData, paymentOptions, interest);
+        return LoanTransactionData.templateOnTop1(loanTransactionData, paymentOptions, interest);
     }
 
     @Override

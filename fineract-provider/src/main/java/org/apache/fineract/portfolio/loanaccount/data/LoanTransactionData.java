@@ -215,7 +215,7 @@ public class LoanTransactionData {
 
     }
 
-    public static LoanTransactionData templateOnTop(final LoanTransactionData loanTransactionData,
+    public static LoanTransactionData templateOnTop1(final LoanTransactionData loanTransactionData,
                                                     final Collection<PaymentTypeData> paymentTypeOptions, BigDecimal interest) {
         return new LoanTransactionData(loanTransactionData.id, loanTransactionData.officeId, loanTransactionData.officeName,
                 loanTransactionData.type, loanTransactionData.paymentDetailData, loanTransactionData.currency, loanTransactionData.date,
