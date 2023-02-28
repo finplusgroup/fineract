@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
 import org.apache.fineract.infrastructure.core.domain.ExternalId;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -34,6 +35,7 @@ import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
  * Immutable data object representing a loan transaction.
  */
 @Getter
+@Setter
 public class LoanTransactionData {
 
     private final Long id;
@@ -206,6 +208,19 @@ public class LoanTransactionData {
                 loanTransactionData.type, loanTransactionData.paymentDetailData, loanTransactionData.currency, loanTransactionData.date,
                 loanTransactionData.amount, loanTransactionData.netDisbursalAmount, loanTransactionData.principalPortion,
                 loanTransactionData.interestPortion, loanTransactionData.feeChargesPortion, loanTransactionData.penaltyChargesPortion,
+                loanTransactionData.overpaymentPortion, loanTransactionData.unrecognizedIncomePortion, paymentTypeOptions,
+                loanTransactionData.externalId, loanTransactionData.transfer, loanTransactionData.fixedEmiAmount,
+                loanTransactionData.outstandingLoanBalance, loanTransactionData.manuallyReversed, loanTransactionData.loanId,
+                loanTransactionData.externalLoanId);
+
+    }
+
+    public static LoanTransactionData templateOnTop(final LoanTransactionData loanTransactionData,
+                                                    final Collection<PaymentTypeData> paymentTypeOptions, BigDecimal interest) {
+        return new LoanTransactionData(loanTransactionData.id, loanTransactionData.officeId, loanTransactionData.officeName,
+                loanTransactionData.type, loanTransactionData.paymentDetailData, loanTransactionData.currency, loanTransactionData.date,
+                loanTransactionData.amount, loanTransactionData.netDisbursalAmount, loanTransactionData.principalPortion,
+                interest, loanTransactionData.feeChargesPortion, loanTransactionData.penaltyChargesPortion,
                 loanTransactionData.overpaymentPortion, loanTransactionData.unrecognizedIncomePortion, paymentTypeOptions,
                 loanTransactionData.externalId, loanTransactionData.transfer, loanTransactionData.fixedEmiAmount,
                 loanTransactionData.outstandingLoanBalance, loanTransactionData.manuallyReversed, loanTransactionData.loanId,

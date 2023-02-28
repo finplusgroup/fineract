@@ -25,15 +25,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
+
 import lombok.AllArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.accounting.common.AccountingRuleType;
@@ -173,6 +166,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
     private final LoanTransactionRepository loanTransactionRepository;
     private final LoanTransactionRelationRepository loanTransactionRelationRepository;
     private final LoanTransactionRelationMapper loanTransactionRelationMapper;
+
+    private final LoanReadPlatformService loanReadPlatformService;
 
     @Override
     public LoanAccountData retrieveOne(final Long loanId) {
@@ -441,7 +436,21 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
         LoanTransactionData loanTransactionData = this.jdbcTemplate.queryForObject(sql, mapper, // NOSONAR
                 LoanTransactionType.REPAYMENT.getValue(), LoanTransactionType.REPAYMENT.getValue(), loanId, loanId);
         final Collection<PaymentTypeData> paymentOptions = this.paymentTypeReadPlatformService.retrieveAllPaymentTypes();
-        return LoanTransactionData.templateOnTop(loanTransactionData, paymentOptions);
+
+        final Collection<LoanTransactionData> loanTransactions = this.loanReadPlatformService.retrieveLoanTransactions(loanId);
+        BigDecimal currentKeBalance = BigDecimal.ZERO;
+        for (LoanTransactionData k : loanTransactions) {
+            if (k.getReversedOnDate() != null) {
+            } else if (Objects.equals(k.getType().getValue(), "Disbursement") || Objects.equals(k.getType().getValue(), "Accrual")) {
+                currentKeBalance = currentKeBalance.add(k.getAmount());
+            } else {
+                currentKeBalance = currentKeBalance.subtract(k.getAmount());
+            }
+        }
+
+        BigDecimal interest = currentKeBalance.subtract(loanTransactionData.getPrincipalPortion());
+
+        return LoanTransactionData.templateOnTop(loanTransactionData, paymentOptions, interest);
     }
 
     @Override
