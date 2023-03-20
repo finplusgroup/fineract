@@ -177,6 +177,8 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
     private final LoanTransactionRelationMapper loanTransactionRelationMapper;
     private final LoanChargePaidByReadPlatformService loanChargePaidByReadPlatformService;
 
+    private final LoanChargeReadPlatformServiceImpl loanChargeReadPlatformService;
+
     @Override
     public LoanAccountData retrieveOne(final Long loanId) {
 
