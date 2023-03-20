@@ -97,7 +97,7 @@ allprojects  {
 
     jgitver {
         strategy 'PATTERN'
-        versionPattern ( project.hasProperty('fineract.release.version') ? '${v}' : '${M}.${m}.${p}-${meta.GIT_SHA1_8}' )
+        versionPattern ( project.hasProperty('fineract.release.version') ? '${M}.${m}.' + project.getProperty('fineract.release.version') + '-${meta.GIT_SHA1_8}'  : '${M}.${m}.${p}-${meta.GIT_SHA1_8}' )
     }
 
     repositories {
@@ -679,7 +679,11 @@ configure(project.fineractPublishProjects) {
             mavenJava(MavenPublication) {
                 groupId 'org.apache.fineract'
                 artifactId project.name
-                version "${project.version}-SNAPSHOT"
+                if (project.hasProperty('fineract.release.version')) {
+                    version "${project.version}"
+                } else {
+                    version "${project.version}-SNAPSHOT"
+                }
 
                 from components.java
 
@@ -712,22 +716,18 @@ configure(project.fineractPublishProjects) {
         }
 
         repositories {
-            def releaseUrl = 'https://repository.apache.org/content/repositories/releases'
-            def stagingUrl = 'https://repository.apache.org/content/repositories/snapshots'
+            def releaseUrl = 'https://mifos.jfrog.io/artifactory/libs-release-local'
+            def stagingUrl = 'https://mifos.jfrog.io/artifactory/libs-snapshot-local'
 
             maven {
-                name 'apache'
-                url hasProperty('fineract.release.version') ? releaseUrl : stagingUrl
+                name 'mifos'
+                url project.hasProperty('fineract.release.version') ? releaseUrl : stagingUrl
                 credentials {
                     username "${findProperty('fineract.config.username')}"
                     password "${findProperty('fineract.config.password')}"
                 }
             }
         }
-    }
-
-    signing {
-        sign publishing.publications.mavenJava
     }
 }
 
