@@ -1172,12 +1172,12 @@
             <column name="is_deleted" valueBoolean="false"/>
             <column name="office_id" valueNumeric="1"/>
             <column name="staff_id"/>
-            <column name="username" value="mifos"/>
-            <column name="firstname" value="App"/>
+            <column name="username" value="finplus"/>
+            <column name="firstname" value="Finplus"/>
             <column name="lastname" value="Administrator"/>
             <column name="password"
                     value="{SHA-256}{1}5787039480429368bf94732aacc771cd0a3ea02bcf504ffe1185ab94213bc63a"/>
-            <column name="email" value="demomfi@mifos.org"/>
+            <column name="email" value="admin@finplusgroup.com"/>
             <column name="firsttime_login_remaining" valueBoolean="false"/>
             <column name="nonexpired" valueBoolean="true"/>
             <column name="nonlocked" valueBoolean="true"/>
@@ -1198,7 +1198,7 @@
             <column name="lastname" value="system"/>
             <column name="password"
                     value="{SHA-256}{2}5787039480429368bf94732aacc771cd0a3ea02bcf504ffe1185ab94213bc63a"/>
-            <column name="email" value="demomfi@mifos.org"/>
+            <column name="email" value="system@mifos.org"/>
             <column name="firsttime_login_remaining" valueBoolean="false"/>
             <column name="nonexpired" valueBoolean="true"/>
             <column name="nonlocked" valueBoolean="true"/>
@@ -3425,12 +3425,12 @@
     <changeSet author="fineract" id="21">
         <insert tableName="m_organisation_currency">
             <column name="id" valueNumeric="21"/>
-            <column name="code" value="USD"/>
+            <column name="code" value="KES"/>
             <column name="decimal_places" valueNumeric="2"/>
             <column name="currency_multiplesof"/>
-            <column name="name" value="US Dollar"/>
-            <column name="display_symbol" value="$"/>
-            <column name="internationalized_name_code" value="currency.USD"/>
+            <column name="name" value="Kenyan Shillings"/>
+            <column name="display_symbol" value="Ksh"/>
+            <column name="internationalized_name_code" value="currency.KES"/>
         </insert>
     </changeSet>
     <changeSet author="fineract" id="22">
