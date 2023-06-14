@@ -21,23 +21,24 @@ package org.apache.fineract.portfolio.meeting.api;
 import static org.apache.fineract.portfolio.meeting.MeetingApiConstants.MEETING_RESOURCE_NAME;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
@@ -62,14 +63,12 @@ import org.apache.fineract.portfolio.meeting.attendance.service.ClientAttendance
 import org.apache.fineract.portfolio.meeting.data.MeetingData;
 import org.apache.fineract.portfolio.meeting.exception.MeetingNotSupportedResourceException;
 import org.apache.fineract.portfolio.meeting.service.MeetingReadPlatformService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/{entityType}/{entityId}/meetings")
+@Path("/v1/{entityType}/{entityId}/meetings")
 @Component
-@Scope("singleton")
 @Tag(name = "Meetings", description = "")
+@RequiredArgsConstructor
 public class MeetingsApiResource {
 
     private final PlatformSecurityContext context;
@@ -84,24 +83,6 @@ public class MeetingsApiResource {
     private static final Set<String> MEETING_RESPONSE_DATA_PARAMETERS = new HashSet<>(
             Arrays.asList(MeetingApiConstants.idParamName, MeetingApiConstants.meetingDateParamName, MeetingApiConstants.clientsAttendance,
                     MeetingApiConstants.clients, MeetingApiConstants.calendarData, MeetingApiConstants.attendanceTypeOptions));
-
-    @Autowired
-    public MeetingsApiResource(final PlatformSecurityContext context, final MeetingReadPlatformService readPlatformService,
-            final ClientAttendanceReadPlatformService attendanceReadPlatformService,
-            final ClientReadPlatformService clientReadPlatformService, final CalendarReadPlatformService calendarReadPlatformService,
-            final AttendanceDropdownReadPlatformService attendanceDropdownReadPlatformService,
-            final DefaultToApiJsonSerializer<MeetingData> toApiJsonSerializer, final ApiRequestParameterHelper apiRequestParameterHelper,
-            final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService) {
-        this.context = context;
-        this.readPlatformService = readPlatformService;
-        this.attendanceReadPlatformService = attendanceReadPlatformService;
-        this.clientReadPlatformService = clientReadPlatformService;
-        this.calendarReadPlatformService = calendarReadPlatformService;
-        this.attendanceDropdownReadPlatformService = attendanceDropdownReadPlatformService;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.apiRequestParameterHelper = apiRequestParameterHelper;
-        this.commandsSourceWritePlatformService = commandsSourceWritePlatformService;
-    }
 
     @GET
     @Path("template")

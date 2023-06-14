@@ -21,50 +21,38 @@ package org.apache.fineract.infrastructure.gcm.api;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
 import java.util.HashMap;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.infrastructure.gcm.domain.DeviceRegistration;
 import org.apache.fineract.infrastructure.gcm.domain.DeviceRegistrationData;
 import org.apache.fineract.infrastructure.gcm.service.DeviceRegistrationReadPlatformService;
 import org.apache.fineract.infrastructure.gcm.service.DeviceRegistrationWritePlatformService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/self/device/registration")
+@Path("/v1/self/device/registration")
 @Component
-@Scope("singleton")
 @Tag(name = "Device Registration", description = "")
+@RequiredArgsConstructor
 public class DeviceRegistrationApiResource {
 
     private final PlatformSecurityContext context;
     private final DeviceRegistrationWritePlatformService deviceRegistrationWritePlatformService;
     private final DefaultToApiJsonSerializer<DeviceRegistrationData> toApiJsonSerializer;
     private final DeviceRegistrationReadPlatformService deviceRegistrationReadPlatformService;
-
-    @Autowired
-    public DeviceRegistrationApiResource(PlatformSecurityContext context,
-            final DefaultToApiJsonSerializer<DeviceRegistrationData> toApiJsonSerializer,
-            final DeviceRegistrationReadPlatformService deviceRegistrationReadPlatformService,
-            final DeviceRegistrationWritePlatformService deviceRegistrationWritePlatformService) {
-        this.context = context;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.deviceRegistrationReadPlatformService = deviceRegistrationReadPlatformService;
-        this.deviceRegistrationWritePlatformService = deviceRegistrationWritePlatformService;
-    }
 
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })

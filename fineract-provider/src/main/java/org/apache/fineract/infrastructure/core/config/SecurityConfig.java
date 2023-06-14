@@ -19,49 +19,66 @@
 
 package org.apache.fineract.infrastructure.core.config;
 
+import static org.springframework.security.authorization.AuthenticatedAuthorizationManager.fullyAuthenticated;
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasAuthority;
+import static org.springframework.security.authorization.AuthorizationManagers.allOf;
+import static org.springframework.security.web.util.matcher.AntPathRequestMatcher.antMatcher;
+
+import org.apache.fineract.commands.domain.CommandSourceRepository;
+import org.apache.fineract.commands.service.CommandSourceService;
+import org.apache.fineract.infrastructure.businessdate.service.BusinessDateReadPlatformService;
+import org.apache.fineract.infrastructure.cache.service.CacheWritePlatformService;
+import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.domain.FineractRequestContextHolder;
+import org.apache.fineract.infrastructure.core.filters.CorrelationHeaderFilter;
 import org.apache.fineract.infrastructure.core.filters.IdempotencyStoreFilter;
+import org.apache.fineract.infrastructure.core.filters.IdempotencyStoreHelper;
+import org.apache.fineract.infrastructure.core.filters.RequestResponseFilter;
+import org.apache.fineract.infrastructure.core.filters.ResponseCorsFilter;
+import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.MDCWrapper;
 import org.apache.fineract.infrastructure.instancemode.filter.FineractInstanceModeApiFilter;
 import org.apache.fineract.infrastructure.jobs.filter.LoanCOBApiFilter;
+import org.apache.fineract.infrastructure.jobs.filter.LoanCOBFilterHelper;
+import org.apache.fineract.infrastructure.security.data.PlatformRequestLog;
 import org.apache.fineract.infrastructure.security.filter.InsecureTwoFactorAuthenticationFilter;
 import org.apache.fineract.infrastructure.security.filter.TenantAwareBasicAuthenticationFilter;
 import org.apache.fineract.infrastructure.security.filter.TwoFactorAuthenticationFilter;
+import org.apache.fineract.infrastructure.security.service.BasicAuthTenantDetailsService;
+import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.TenantAwareJpaPlatformUserDetailsService;
+import org.apache.fineract.infrastructure.security.service.TwoFactorService;
+import org.apache.fineract.notification.service.UserNotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint;
-import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
-import org.springframework.security.web.context.SecurityContextPersistenceFilter;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 @Configuration
 @ConditionalOnProperty("fineract.security.basicauth.enabled")
-@EnableGlobalMethodSecurity(prePostEnabled = true)
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @Autowired
     private TenantAwareJpaPlatformUserDetailsService userDetailsService;
-
-    @Autowired
-    private TwoFactorAuthenticationFilter twoFactorAuthenticationFilter;
-
-    @Autowired
-    private FineractInstanceModeApiFilter fineractInstanceModeApiFilter;
-    @Autowired
-    private LoanCOBApiFilter loanCOBApiFilter;
 
     @Autowired
     private FineractProperties fineractProperties;
@@ -70,43 +87,110 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
     private ServerProperties serverProperties;
 
     @Autowired
-    private IdempotencyStoreFilter idempotencyStoreFilter;
+    private ToApiJsonSerializer<PlatformRequestLog> toApiJsonSerializer;
+    @Autowired
+    private ConfigurationDomainService configurationDomainService;
+    @Autowired
+    private CacheWritePlatformService cacheWritePlatformService;
+    @Autowired
+    private UserNotificationService userNotificationService;
+    @Autowired
+    private BasicAuthTenantDetailsService basicAuthTenantDetailsService;
+    @Autowired
+    private BusinessDateReadPlatformService businessDateReadPlatformService;
+    @Autowired
+    private MDCWrapper mdcWrapper;
+    @Autowired
+    private CommandSourceRepository commandSourceRepository;
+    @Autowired
+    private CommandSourceService commandSourceService;
+    @Autowired
+    private FineractRequestContextHolder fineractRequestContextHolder;
 
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-        http //
-                .csrf().disable() // NOSONAR only creating a service that is used by non-browser clients
-                .antMatcher("/api/**").authorizeRequests() //
-                .antMatchers(HttpMethod.OPTIONS, "/api/**").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/echo").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/authentication").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/self/authentication").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/self/registration").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/self/registration/user").permitAll() //
-                .antMatchers(HttpMethod.PUT, "/api/*/instance-mode").permitAll() //
-                .antMatchers(HttpMethod.POST, "/api/*/twofactor/validate").fullyAuthenticated() //
-                .antMatchers("/api/*/twofactor").fullyAuthenticated() //
-                .antMatchers("/api/**").access("isFullyAuthenticated() and hasAuthority('TWOFACTOR_AUTHENTICATED')").and() //
-                .httpBasic() //
-                .authenticationEntryPoint(basicAuthenticationEntryPoint()) //
-                .and() //
-                .sessionManagement() //
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS) //
-                .and() //
-                .addFilterAfter(fineractInstanceModeApiFilter, SecurityContextPersistenceFilter.class) //
-                .addFilterAfter(tenantAwareBasicAuthenticationFilter(), FineractInstanceModeApiFilter.class) //
-                .addFilterAfter(twoFactorAuthenticationFilter, BasicAuthenticationFilter.class) //
-                .addFilterAfter(loanCOBApiFilter, InsecureTwoFactorAuthenticationFilter.class)
-                .addFilterBefore(idempotencyStoreFilter, ExceptionTranslationFilter.class);
-
-        if (serverProperties.getSsl().isEnabled()) {
-            http.requiresChannel(channel -> channel.antMatchers("/api/**").requiresSecure());
-        }
-    }
+    @Autowired
+    private LoanCOBFilterHelper loanCOBFilterHelper;
+    @Autowired
+    private PlatformSecurityContext context;
+    @Autowired
+    private IdempotencyStoreHelper idempotencyStoreHelper;
 
     @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http //
+                .securityMatcher(antMatcher("/api/**")).authorizeHttpRequests((auth) -> {
+                    auth.requestMatchers(antMatcher(HttpMethod.OPTIONS, "/api/**")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/echo")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/authentication")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/self/authentication")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/self/registration")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/self/registration/user")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.PUT, "/api/*/instance-mode")).permitAll() //
+                            .requestMatchers(antMatcher(HttpMethod.POST, "/api/*/twofactor/validate")).fullyAuthenticated() //
+                            .requestMatchers(antMatcher("/api/*/twofactor")).fullyAuthenticated() //
+                            .requestMatchers(antMatcher("/api/**"))
+                            .access(allOf(fullyAuthenticated(), hasAuthority("TWOFACTOR_AUTHENTICATED"))); //
+                }).httpBasic((httpBasic) -> httpBasic.authenticationEntryPoint(basicAuthenticationEntryPoint())) //
+                .csrf((csrf) -> csrf.disable()) // NOSONAR only creating a service that is used by non-browser clients
+                .sessionManagement((smc) -> smc.sessionCreationPolicy(SessionCreationPolicy.STATELESS)) //
+                .addFilterBefore(tenantAwareBasicAuthenticationFilter(), SecurityContextHolderFilter.class) //
+                .addFilterAfter(requestResponseFilter(), ExceptionTranslationFilter.class) //
+                .addFilterAfter(correlationHeaderFilter(), RequestResponseFilter.class) //
+                .addFilterAfter(responseCorsFilter(), CorrelationHeaderFilter.class) //
+                .addFilterAfter(fineractInstanceModeApiFilter(), ResponseCorsFilter.class) //
+                .addFilterAfter(loanCOBApiFilter(), FineractInstanceModeApiFilter.class) //
+                .addFilterAfter(idempotencyStoreFilter(), LoanCOBApiFilter.class); //
+
+        if (fineractProperties.getSecurity().getTwoFactor().isEnabled()) {
+            http.addFilterAfter(twoFactorAuthenticationFilter(), ResponseCorsFilter.class);
+        } else {
+            http.addFilterAfter(insecureTwoFactorAuthenticationFilter(), ResponseCorsFilter.class);
+        }
+
+        if (serverProperties.getSsl().isEnabled()) {
+            http.requiresChannel(channel -> channel.requestMatchers(antMatcher("/api/**")).requiresSecure());
+        }
+        return http.build();
+    }
+
+    public RequestResponseFilter requestResponseFilter() {
+        return new RequestResponseFilter();
+    }
+
+    public LoanCOBApiFilter loanCOBApiFilter() {
+        return new LoanCOBApiFilter(loanCOBFilterHelper);
+    }
+
+    public TwoFactorAuthenticationFilter twoFactorAuthenticationFilter() {
+        TwoFactorService twoFactorService = applicationContext.getBean(TwoFactorService.class);
+        return new TwoFactorAuthenticationFilter(twoFactorService);
+    }
+
+    public InsecureTwoFactorAuthenticationFilter insecureTwoFactorAuthenticationFilter() {
+        return new InsecureTwoFactorAuthenticationFilter();
+    }
+
+    public FineractInstanceModeApiFilter fineractInstanceModeApiFilter() {
+        return new FineractInstanceModeApiFilter(fineractProperties);
+    }
+
+    public IdempotencyStoreFilter idempotencyStoreFilter() {
+        return new IdempotencyStoreFilter(fineractRequestContextHolder, idempotencyStoreHelper, fineractProperties);
+    }
+
+    public CorrelationHeaderFilter correlationHeaderFilter() {
+        return new CorrelationHeaderFilter(fineractProperties, mdcWrapper);
+    }
+
+    public ResponseCorsFilter responseCorsFilter() {
+        return new ResponseCorsFilter();
+    }
+
     public TenantAwareBasicAuthenticationFilter tenantAwareBasicAuthenticationFilter() throws Exception {
-        return new TenantAwareBasicAuthenticationFilter(authenticationManagerBean(), basicAuthenticationEntryPoint());
+        TenantAwareBasicAuthenticationFilter filter = new TenantAwareBasicAuthenticationFilter(authenticationManagerBean(),
+                basicAuthenticationEntryPoint(), toApiJsonSerializer, configurationDomainService, cacheWritePlatformService,
+                userNotificationService, basicAuthTenantDetailsService, businessDateReadPlatformService);
+        filter.setRequestMatcher(antMatcher("/api/**"));
+        return filter;
     }
 
     @Bean
@@ -129,32 +213,10 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth.authenticationProvider(authProvider());
-        auth.eraseCredentials(false);
-    }
-
-    @Override
     @Bean
     public AuthenticationManager authenticationManagerBean() throws Exception {
-        return super.authenticationManagerBean();
-    }
-
-    @Bean
-    public FilterRegistrationBean<TenantAwareBasicAuthenticationFilter> tenantAwareBasicAuthenticationFilterRegistration()
-            throws Exception {
-        FilterRegistrationBean<TenantAwareBasicAuthenticationFilter> registration = new FilterRegistrationBean<TenantAwareBasicAuthenticationFilter>(
-                tenantAwareBasicAuthenticationFilter());
-        registration.setEnabled(false);
-        return registration;
-    }
-
-    @Bean
-    public FilterRegistrationBean<TwoFactorAuthenticationFilter> twoFactorAuthenticationFilterRegistration() {
-        FilterRegistrationBean<TwoFactorAuthenticationFilter> registration = new FilterRegistrationBean<TwoFactorAuthenticationFilter>(
-                twoFactorAuthenticationFilter);
-        registration.setEnabled(false);
-        return registration;
+        ProviderManager providerManager = new ProviderManager(authProvider());
+        providerManager.setEraseCredentialsAfterAuthentication(false);
+        return providerManager;
     }
 }

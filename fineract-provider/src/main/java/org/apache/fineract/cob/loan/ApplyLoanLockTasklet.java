@@ -22,12 +22,10 @@ import com.google.common.collect.Lists;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.cob.common.CustomJobParameterResolver;
 import org.apache.fineract.cob.data.LoanCOBParameter;
 import org.apache.fineract.cob.domain.LoanAccountLock;
 import org.apache.fineract.cob.domain.LockOwner;
@@ -41,11 +39,12 @@ import org.springframework.batch.repeat.RepeatStatus;
 
 @Slf4j
 @RequiredArgsConstructor
-public class ApplyLoanLockTasklet implements Tasklet, LoanCatchUpSupport {
+public class ApplyLoanLockTasklet implements Tasklet {
 
     private final FineractProperties fineractProperties;
     private final LoanLockingService loanLockingService;
     private final RetrieveLoanIdService retrieveLoanIdService;
+    private final CustomJobParameterResolver customJobParameterResolver;
 
     @Override
     public RepeatStatus execute(@NotNull StepContribution contribution, @NotNull ChunkContext chunkContext) throws Exception {
@@ -57,30 +56,23 @@ public class ApplyLoanLockTasklet implements Tasklet, LoanCatchUpSupport {
                 || (loanCOBParameter.getMinLoanId().equals(0L) && loanCOBParameter.getMaxLoanId().equals(0L))) {
             loanIds = Collections.emptyList();
         } else {
-            loanIds = new ArrayList<>(retrieveLoanIdService
-                    .retrieveAllNonClosedLoansByLastClosedBusinessDateAndMinAndMaxLoanId(loanCOBParameter, isCatchUp(contribution)));
+            loanIds = new ArrayList<>(
+                    retrieveLoanIdService.retrieveAllNonClosedLoansByLastClosedBusinessDateAndMinAndMaxLoanId(loanCOBParameter,
+                            customJobParameterResolver
+                                    .getCustomJobParameterById(contribution.getStepExecution(), LoanCOBConstant.IS_CATCH_UP_PARAMETER_NAME)
+                                    .map(Boolean::parseBoolean).orElse(false)));
         }
         List<List<Long>> loanIdPartitions = Lists.partition(loanIds, getInClauseParameterSizeLimit());
         List<LoanAccountLock> accountLocks = new ArrayList<>();
         loanIdPartitions.forEach(loanIdPartition -> accountLocks.addAll(loanLockingService.findAllByLoanIdIn(loanIdPartition)));
 
-        Map<Long, LoanAccountLock> alreadySoftLockedAccountsMap = accountLocks.stream()
-                .filter(e -> LockOwner.LOAN_COB_PARTITIONING.equals(e.getLockOwner()))
-                .collect(Collectors.toMap(LoanAccountLock::getLoanId, Function.identity()));
-
         List<Long> alreadyLockedByChunkProcessingAccountIds = accountLocks.stream()
                 .filter(e -> LockOwner.LOAN_COB_CHUNK_PROCESSING.equals(e.getLockOwner())).map(LoanAccountLock::getLoanId).toList();
 
-        List<Long> toBeProcessedLoanIds = new ArrayList<>(alreadySoftLockedAccountsMap.keySet());
+        List<Long> toBeProcessedLoanIds = new ArrayList<>(loanIds);
+        toBeProcessedLoanIds.removeAll(alreadyLockedByChunkProcessingAccountIds);
 
-        loanLockingService.upgradeLock(toBeProcessedLoanIds, LockOwner.LOAN_COB_CHUNK_PROCESSING);
-
-        toBeProcessedLoanIds.addAll(alreadyLockedByChunkProcessingAccountIds);
-        List<Long> alreadyLockedByInlineCOBOrProcessedLoanIds = new ArrayList<>(loanIds);
-        alreadyLockedByInlineCOBOrProcessedLoanIds.removeAll(toBeProcessedLoanIds);
-
-        loanIds.removeAll(alreadyLockedByInlineCOBOrProcessedLoanIds);
-
+        loanLockingService.applyLock(toBeProcessedLoanIds, LockOwner.LOAN_COB_CHUNK_PROCESSING);
         return RepeatStatus.FINISHED;
     }
 

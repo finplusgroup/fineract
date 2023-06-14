@@ -26,20 +26,21 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Map;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -55,15 +56,12 @@ import org.apache.fineract.portfolio.self.account.exception.DailyTPTTransactionA
 import org.apache.fineract.portfolio.self.account.service.SelfAccountTransferReadService;
 import org.apache.fineract.portfolio.self.account.service.SelfBeneficiariesTPTReadPlatformService;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/self/accounttransfers")
+@Path("/v1/self/accounttransfers")
 @Component
-@Scope("singleton")
-
 @Tag(name = "Self Account transfer", description = "")
+@RequiredArgsConstructor
 public class SelfAccountTransferApiResource {
 
     private final PlatformSecurityContext context;
@@ -75,26 +73,6 @@ public class SelfAccountTransferApiResource {
     private final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService;
     private final ConfigurationDomainService configurationDomainService;
     private final AccountTransfersReadPlatformService accountTransfersReadPlatformService;
-
-    @Autowired
-    public SelfAccountTransferApiResource(final PlatformSecurityContext context,
-            final DefaultToApiJsonSerializer<SelfAccountTransferData> toApiJsonSerializer,
-            final AccountTransfersApiResource accountTransfersApiResource,
-            final SelfAccountTransferReadService selfAccountTransferReadService, final ApiRequestParameterHelper apiRequestParameterHelper,
-            final SelfAccountTransferDataValidator dataValidator,
-            final SelfBeneficiariesTPTReadPlatformService tptBeneficiaryReadPlatformService,
-            final ConfigurationDomainService configurationDomainService,
-            final AccountTransfersReadPlatformService accountTransfersReadPlatformService) {
-        this.context = context;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.accountTransfersApiResource = accountTransfersApiResource;
-        this.selfAccountTransferReadService = selfAccountTransferReadService;
-        this.apiRequestParameterHelper = apiRequestParameterHelper;
-        this.dataValidator = dataValidator;
-        this.tptBeneficiaryReadPlatformService = tptBeneficiaryReadPlatformService;
-        this.configurationDomainService = configurationDomainService;
-        this.accountTransfersReadPlatformService = accountTransfersReadPlatformService;
-    }
 
     @GET
     @Path("template")

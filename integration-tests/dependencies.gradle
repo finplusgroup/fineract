@@ -20,8 +20,11 @@ dependencies {
     // testCompile dependencies are ONLY used in src/test, not src/main.
     // Do NOT repeat dependencies which are ALREADY in implementation or runtimeOnly!
     //
-    tomcat 'org.apache.tomcat:tomcat:9.0.69@zip'
+    tomcat 'org.apache.tomcat:tomcat:10.1.9@zip'
     testImplementation( files("$rootDir/fineract-provider/build/classes/java/main/"),
+            project(path: ':fineract-core', configuration: 'runtimeElements'),
+            project(path: ':fineract-investor', configuration: 'runtimeElements'),
+            project(path: ':fineract-loan', configuration: 'runtimeElements'),
             project(path: ':fineract-provider', configuration: 'runtimeElements'),
             project(path: ':fineract-avro-schemas', configuration: 'runtimeElements'),
             project(path: ':fineract-client', configuration: 'runtimeElements'),
@@ -39,6 +42,8 @@ dependencies {
         exclude group: 'org.apache.sling'
         exclude group: 'com.sun.xml.bind'
     }
+    testImplementation 'org.apache.groovy:groovy-xml'
+    testImplementation 'org.apache.groovy:groovy-json'
     testImplementation 'org.awaitility:awaitility'
 
     testCompileOnly 'org.projectlombok:lombok'
@@ -48,5 +53,5 @@ dependencies {
     testImplementation 'org.mapstruct:mapstruct'
     testAnnotationProcessor 'org.mapstruct:mapstruct-processor'
 
-    testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.0'
+    testImplementation 'com.github.tomakehurst:wiremock:3.0.0-beta-8'
 }

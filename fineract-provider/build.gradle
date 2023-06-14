@@ -25,6 +25,7 @@ apply plugin: 'org.springframework.boot'
 apply plugin: 'com.gorylenko.gradle-git-properties'
 apply plugin: 'io.swagger.core.v3.swagger-gradle-plugin'
 apply plugin: 'com.google.cloud.tools.jib'
+apply plugin: 'org.springframework.boot'
 
 check.dependsOn('cucumber')
 
@@ -39,7 +40,7 @@ compileJava.doLast {
         description = 'Performs EclipseLink static weaving of entity classes'
         def target = source
         main 'org.eclipse.persistence.tools.weaving.jpa.StaticWeave'
-        args '-persistenceinfo', source, '-classpath', sourceSets.main.runtimeClasspath, source, target
+        args '-persistenceinfo', source, source, target
         classpath sourceSets.main.runtimeClasspath
     }
     delete {
@@ -70,6 +71,7 @@ resolve {
     outputFormat = 'JSONANDYAML'
     prettyPrint = false
     classpath = sourceSets.main.runtimeClasspath
+    buildClasspath = classpath
     outputDir = file("${buildDir}/classes/java/main/static")
     openApiFile = file("${buildDir}/tmp/swagger/fineract-input.yaml")
     sortOutput = true
@@ -122,8 +124,8 @@ eclipse {
 }
 
 /* http://stackoverflow.com/questions/19653311/jpa-repository-works-in-idea-and-production-but-not-in-gradle */
-sourceSets.main.output.resourcesDir = sourceSets.main.java.outputDir
-sourceSets.test.output.resourcesDir = sourceSets.test.java.outputDir
+sourceSets.main.output.resourcesDir = sourceSets.main.java.classesDirectory
+sourceSets.test.output.resourcesDir = sourceSets.test.java.classesDirectory
 
 if (!(project.hasProperty('env') && project.getProperty('env') == 'dev')) {
     sourceSets {
@@ -234,7 +236,7 @@ bootJar {
     manifest {
         attributes('Main-Class': 'org.springframework.boot.loader.PropertiesLauncher', 'Implementation-Title': 'Apache Fineract', 'Implementation-Version': project.version)
     }
-    classifier = ''
+    archiveClassifier = ''
     dependsOn resolve
 }
 
@@ -345,4 +347,4 @@ checkstyleTest.dependsOn resolve
 rat.dependsOn prepareInputYaml
 spotbugsTest.dependsOn resolve
 compileTestJava.dependsOn ':fineract-client:processResources', ':fineract-avro-schemas:processResources'
-bootJarMainClassName.dependsOn resolve
+resolveMainClassName.dependsOn resolve

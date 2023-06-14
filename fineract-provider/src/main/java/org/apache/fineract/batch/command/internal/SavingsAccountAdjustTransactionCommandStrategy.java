@@ -18,10 +18,12 @@
  */
 package org.apache.fineract.batch.command.internal;
 
+import static org.apache.fineract.batch.command.CommandStrategyUtils.relativeUrlWithoutVersion;
+
 import com.google.common.base.Splitter;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.List;
 import java.util.Map;
-import javax.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.batch.command.CommandStrategy;
@@ -44,7 +46,7 @@ public class SavingsAccountAdjustTransactionCommandStrategy implements CommandSt
 
         response.setRequestId(batchRequest.getRequestId());
         response.setHeaders(batchRequest.getHeaders());
-        String relativeUrl = batchRequest.getRelativeUrl();
+        String relativeUrl = relativeUrlWithoutVersion(batchRequest);
         final List<String> pathParameters;
         String command = null;
         if (relativeUrl.indexOf('?') > 0) {

@@ -19,6 +19,7 @@
 package org.apache.fineract.cob.loan;
 
 import org.apache.fineract.cob.COBBusinessStepService;
+import org.apache.fineract.cob.common.CustomJobParameterResolver;
 import org.apache.fineract.cob.common.ResetContextTasklet;
 import org.apache.fineract.cob.domain.LoanAccountLockRepository;
 import org.apache.fineract.cob.listener.InlineCOBLoanItemListener;
@@ -29,14 +30,16 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
-import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.listener.ExecutionContextPromotionListener;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.config.annotation.EnableBatchIntegration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
@@ -44,9 +47,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class LoanInlineCOBConfig {
 
     @Autowired
-    private JobBuilderFactory jobBuilderFactory;
+    private JobRepository jobRepository;
     @Autowired
-    private StepBuilderFactory stepBuilderFactory;
+    private PlatformTransactionManager transactionManager;
     @Autowired
     private PropertyService propertyService;
     @Autowired
@@ -58,31 +61,36 @@ public class LoanInlineCOBConfig {
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
-    private CustomJobParameterRepository loanIdListRepository;
+    private CustomJobParameterRepository customJobParameterRepository;
+    @Autowired
+    private CustomJobParameterResolver customJobParameterResolver;
+
     @Autowired
     private LoanLockingService loanLockingService;
 
     @Bean
     public InlineLoanCOBBuildExecutionContextTasklet inlineLoanCOBBuildExecutionContextTasklet() {
-        return new InlineLoanCOBBuildExecutionContextTasklet(cobBusinessStepService, loanIdListRepository);
+        return new InlineLoanCOBBuildExecutionContextTasklet(cobBusinessStepService, customJobParameterRepository,
+                customJobParameterResolver);
     }
 
     @Bean
     protected Step inlineCOBBuildExecutionContextStep() {
-        return stepBuilderFactory.get("Inline COB build execution context step").tasklet(inlineLoanCOBBuildExecutionContextTasklet())
-                .listener(inlineCobPromotionListener()).build();
+        return new StepBuilder("Inline COB build execution context step", jobRepository)
+                .tasklet(inlineLoanCOBBuildExecutionContextTasklet(), transactionManager).listener(inlineCobPromotionListener()).build();
     }
 
     @Bean
     public Step inlineLoanCOBStep() {
-        return stepBuilderFactory.get("Inline Loan COB Step").<Loan, Loan>chunk(propertyService.getChunkSize(JobName.LOAN_COB.name()))
+        return new StepBuilder("Inline Loan COB Step", jobRepository)
+                .<Loan, Loan>chunk(propertyService.getChunkSize(JobName.LOAN_COB.name()), transactionManager)
                 .reader(inlineCobWorkerItemReader()).processor(inlineCobWorkerItemProcessor()).writer(inlineCobWorkerItemWriter())
                 .listener(inlineCobLoanItemListener()).build();
     }
 
     @Bean(name = "loanInlineCOBJob")
     public Job loanInlineCOBJob() {
-        return jobBuilderFactory.get(LoanCOBConstant.INLINE_LOAN_COB_JOB_NAME) //
+        return new JobBuilder(LoanCOBConstant.INLINE_LOAN_COB_JOB_NAME, jobRepository) //
                 .start(inlineCOBBuildExecutionContextStep()).next(inlineLoanCOBStep()).next(inlineCOBResetContextStep()) //
                 .incrementer(new RunIdIncrementer()) //
                 .build();
@@ -100,7 +108,7 @@ public class LoanInlineCOBConfig {
 
     @Bean
     public Step inlineCOBResetContextStep() {
-        return stepBuilderFactory.get("Reset context - Step").tasklet(inlineCOBResetContext()).build();
+        return new StepBuilder("Reset context - Step", jobRepository).tasklet(inlineCOBResetContext(), transactionManager).build();
     }
 
     @Bean

@@ -18,9 +18,11 @@
  */
 package org.apache.fineract.batch.command.internal;
 
+import static org.apache.fineract.batch.command.CommandStrategyUtils.relativeUrlWithoutVersion;
+
+import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
 import java.util.Map;
-import javax.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.batch.command.CommandStrategy;
@@ -46,7 +48,7 @@ public class GetSavingsAccountByIdCommandStrategy implements CommandStrategy {
         response.setRequestId(batchRequest.getRequestId());
         response.setHeaders(batchRequest.getHeaders());
 
-        final String relativeUrl = batchRequest.getRelativeUrl();
+        final String relativeUrl = relativeUrlWithoutVersion(batchRequest);
 
         final Long savingsAccountId;
         Map<String, String> queryParameters = new HashMap<>();

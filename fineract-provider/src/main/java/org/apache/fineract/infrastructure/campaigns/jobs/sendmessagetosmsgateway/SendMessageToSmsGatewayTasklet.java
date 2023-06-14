@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.infrastructure.campaigns.jobs.sendmessagetosmsgateway;
 
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import javax.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -147,7 +147,7 @@ public class SendMessageToSmsGatewayTasklet implements Tasklet {
         HttpEntity<?> entity = (HttpEntity<?>) hostConfig.get("entity");
         ResponseEntity<String> responseOne = restTemplate.exchange(uri, HttpMethod.POST, entity, new ParameterizedTypeReference<>() {});
         if (!responseOne.getStatusCode().equals(HttpStatus.ACCEPTED)) {
-            log.debug("{}", responseOne.getStatusCode().name());
+            log.debug("{}", responseOne.getStatusCode().value());
             throw new ConnectionFailureException(SmsCampaignConstants.SMS);
         }
     }

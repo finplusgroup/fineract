@@ -27,18 +27,19 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
@@ -49,14 +50,12 @@ import org.apache.fineract.organisation.monetary.data.CurrencyData;
 import org.apache.fineract.organisation.monetary.service.CurrencyReadPlatformService;
 import org.apache.fineract.portfolio.collateralmanagement.data.CollateralManagementData;
 import org.apache.fineract.portfolio.collateralmanagement.service.CollateralManagementReadPlatformService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/collateral-management")
+@Path("/v1/collateral-management")
 @Component
-@Scope("singleton")
 @Tag(name = "Collateral Management", description = "Collateral Management is for managing collateral operations")
+@RequiredArgsConstructor
 public class CollateralManagementApiResource {
 
     private final DefaultToApiJsonSerializer<CollateralManagementData> apiJsonSerializerService;
@@ -65,20 +64,6 @@ public class CollateralManagementApiResource {
     private final PlatformSecurityContext context;
     private final CollateralManagementReadPlatformService collateralManagementReadPlatformService;
     private final CurrencyReadPlatformService currencyReadPlatformService;
-
-    @Autowired
-    public CollateralManagementApiResource(final DefaultToApiJsonSerializer<CollateralManagementData> apiJsonSerializerService,
-            final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService, final PlatformSecurityContext context,
-            final CollateralManagementReadPlatformService collateralManagementReadPlatformService,
-            final CurrencyReadPlatformService currencyReadPlatformService,
-            final DefaultToApiJsonSerializer<CurrencyData> apiJsonSerializerServiceForCurrency) {
-        this.apiJsonSerializerService = apiJsonSerializerService;
-        this.commandsSourceWritePlatformService = commandsSourceWritePlatformService;
-        this.context = context;
-        this.collateralManagementReadPlatformService = collateralManagementReadPlatformService;
-        this.currencyReadPlatformService = currencyReadPlatformService;
-        this.apiJsonSerializerServiceForCurrency = apiJsonSerializerServiceForCurrency;
-    }
 
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })

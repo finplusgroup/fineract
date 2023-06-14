@@ -27,13 +27,14 @@ import org.apache.fineract.infrastructure.jobs.service.JobName;
 import org.apache.fineract.infrastructure.springbatch.PropertyService;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.JobScope;
-import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.explore.JobExplorer;
+import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.listener.ExecutionContextPromotionListener;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.config.annotation.EnableBatchIntegration;
 import org.springframework.batch.integration.partition.RemotePartitioningManagerStepBuilderFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.channel.DirectChannel;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @EnableBatchIntegration
@@ -50,11 +52,11 @@ import org.springframework.integration.channel.DirectChannel;
 public class LoanCOBManagerConfiguration {
 
     @Autowired
-    private JobBuilderFactory jobBuilderFactory;
+    private JobRepository jobRepository;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
     @Autowired
     private RemotePartitioningManagerStepBuilderFactory stepBuilderFactory;
-    @Autowired
-    private StepBuilderFactory localStepBuilderFactory;
     @Autowired
     private PropertyService propertyService;
     @Autowired
@@ -73,8 +75,6 @@ public class LoanCOBManagerConfiguration {
     private BusinessEventNotifierService businessEventNotifierService;
     @Autowired
     private CustomJobParameterResolver customJobParameterResolver;
-    @Autowired
-    private LoanLockingService loanLockingService;
 
     @Bean
     @JobScope
@@ -90,35 +90,25 @@ public class LoanCOBManagerConfiguration {
 
     @Bean
     public Step loanIdParameterStep() {
-        return localStepBuilderFactory.get("Set loan ID parameter - Step").tasklet(loanIdParameterTasklet()).build();
-    }
-
-    @Bean
-    public Step lockStep() {
-        return localStepBuilderFactory.get("Lock loan accounts - Step").tasklet(lockLoanTasklet()).build();
+        return new StepBuilder("Set loan ID parameter - Step", jobRepository).tasklet(loanIdParameterTasklet(), transactionManager).build();
     }
 
     @Bean
     public Step resolveCustomJobParametersStep() {
-        return localStepBuilderFactory.get("Resolve custom job parameters - Step").tasklet(resolveCustomJobParametersTasklet())
-                .listener(customJobParametersPromotionListener()).build();
+        return new StepBuilder("Resolve custom job parameters - Step", jobRepository)
+                .tasklet(resolveCustomJobParametersTasklet(), transactionManager).listener(customJobParametersPromotionListener()).build();
     }
 
     @Bean
     public Step stayedLockedStep() {
-        return localStepBuilderFactory.get("Stayed locked loan accounts - Step").tasklet(stayedLockedTasklet()).build();
+        return new StepBuilder("Stayed locked loan accounts - Step", jobRepository).tasklet(stayedLockedTasklet(), transactionManager)
+                .build();
     }
 
     @Bean
     @JobScope
     public LoanIdParameterTasklet loanIdParameterTasklet() {
-        return new LoanIdParameterTasklet(retrieveLoanIdService);
-    }
-
-    @Bean
-    @JobScope
-    public LockLoanTasklet lockLoanTasklet() {
-        return new LockLoanTasklet(loanLockingService);
+        return new LoanIdParameterTasklet(retrieveLoanIdService, customJobParameterResolver);
     }
 
     @Bean
@@ -135,10 +125,10 @@ public class LoanCOBManagerConfiguration {
 
     @Bean(name = "loanCOBJob")
     public Job loanCOBJob() {
-        return jobBuilderFactory.get(JobName.LOAN_COB.name()) //
+        return new JobBuilder(JobName.LOAN_COB.name(), jobRepository) //
                 .listener(new COBExecutionListenerRunner(applicationContext, JobName.LOAN_COB.name())) //
                 .start(resolveCustomJobParametersStep()) //
-                .next(loanIdParameterStep()).next(lockStep()).next(loanCOBStep()).next(stayedLockedStep()) //
+                .next(loanIdParameterStep()).next(loanCOBStep()).next(stayedLockedStep()) //
                 .incrementer(new RunIdIncrementer()) //
                 .build();
     }

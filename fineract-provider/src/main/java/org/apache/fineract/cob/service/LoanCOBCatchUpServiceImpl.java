@@ -18,11 +18,10 @@
  */
 package org.apache.fineract.cob.service;
 
+import com.google.gson.Gson;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.fineract.cob.data.IsCatchUpRunningDTO;
 import org.apache.fineract.cob.data.LoanIdAndLastClosedBusinessDate;
 import org.apache.fineract.cob.data.OldestCOBProcessedLoanDTO;
@@ -30,9 +29,10 @@ import org.apache.fineract.cob.loan.LoanCOBConstant;
 import org.apache.fineract.cob.loan.RetrieveLoanIdService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.FineractContext;
+import org.apache.fineract.infrastructure.core.serialization.GoogleGsonSerializerHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameterRepository;
 import org.apache.fineract.infrastructure.jobs.domain.JobExecutionRepository;
-import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +46,8 @@ public class LoanCOBCatchUpServiceImpl implements LoanCOBCatchUpService {
     private final RetrieveLoanIdService retrieveLoanIdService;
 
     private final LoanAccountLockService accountLockService;
+    private final CustomJobParameterRepository customJobParameterRepository;
+    protected Gson gson = GoogleGsonSerializerHelper.createSimpleGson();
 
     @Override
     public void unlockHardLockedLoans() {
@@ -73,14 +75,9 @@ public class LoanCOBCatchUpServiceImpl implements LoanCOBCatchUpService {
 
     @Override
     public IsCatchUpRunningDTO isCatchUpRunning() {
-        List<Long> runningCatchUpExecutionIds = jobExecutionRepository.getRunningJobsIdsByExecutionParameter(LoanCOBConstant.JOB_NAME,
-                LoanCOBConstant.LOAN_COB_CUSTOM_JOB_PARAMETER_KEY, LoanCOBConstant.IS_CATCH_UP_PARAMETER_NAME, "true");
-        if (CollectionUtils.isNotEmpty(runningCatchUpExecutionIds)) {
-            JobExecution jobExecution = jobExplorer.getJobExecution(runningCatchUpExecutionIds.get(0));
-            String executionDateString = (String) jobExecution.getExecutionContext().get(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME);
-            return new IsCatchUpRunningDTO(true, LocalDate.parse(executionDateString, DateTimeFormatter.ISO_DATE));
-        } else {
-            return new IsCatchUpRunningDTO(false, null);
-        }
+        LocalDate runningCatchUpBusinessDate = jobExecutionRepository.getBusinessDateOfRunningJobByExecutionParameter(
+                LoanCOBConstant.JOB_NAME, LoanCOBConstant.LOAN_COB_CUSTOM_JOB_PARAMETER_KEY, LoanCOBConstant.IS_CATCH_UP_PARAMETER_NAME,
+                "true", LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME);
+        return new IsCatchUpRunningDTO(runningCatchUpBusinessDate != null, runningCatchUpBusinessDate);
     }
 }
