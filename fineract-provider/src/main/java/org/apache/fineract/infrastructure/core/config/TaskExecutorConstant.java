@@ -16,23 +16,16 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.investor.data;
+package org.apache.fineract.infrastructure.core.config;
 
-import java.time.LocalDate;
-import lombok.Data;
+public final class TaskExecutorConstant {
 
-@Data
-public class ExternalTransferData {
+    private TaskExecutorConstant() {
 
-    private Long transferId;
-    private ExternalTransferOwnerData owner;
-    private ExternalTransferLoanData loan;
-    private ExternalTransferDataDetails details;
-    private String transferExternalId;
-    private String purchasePriceRatio;
-    private LocalDate settlementDate;
-    private ExternalTransferStatus status;
-    private ExternalTransferSubStatus subStatus;
-    private LocalDate effectiveFrom;
-    private LocalDate effectiveTo;
+    }
+
+    public static final String DEFAULT_TASK_EXECUTOR_BEAN_NAME = "fineractDefaultThreadPoolTaskExecutor";
+    public static final String CONFIGURABLE_TASK_EXECUTOR_BEAN_NAME = "fineractConfigurableThreadPoolTaskExecutor";
+    public static final String EVENT_TASK_EXECUTOR_BEAN_NAME = "externalEventJmsProducerExecutor";
+    public static final String LOAN_COB_CATCH_UP_TASK_EXECUTOR_BEAN_NAME = "loanCOBCatchUpThreadPoolTaskExecutor";
 }

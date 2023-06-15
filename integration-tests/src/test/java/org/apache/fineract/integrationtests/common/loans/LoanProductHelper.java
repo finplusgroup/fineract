@@ -16,23 +16,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.investor.data;
+package org.apache.fineract.integrationtests.common.loans;
 
-import java.time.LocalDate;
-import lombok.Data;
+import org.apache.fineract.client.models.PostLoanProductsRequest;
+import org.apache.fineract.client.models.PostLoanProductsResponse;
+import org.apache.fineract.integrationtests.client.IntegrationTest;
 
-@Data
-public class ExternalTransferData {
+public class LoanProductHelper extends IntegrationTest {
 
-    private Long transferId;
-    private ExternalTransferOwnerData owner;
-    private ExternalTransferLoanData loan;
-    private ExternalTransferDataDetails details;
-    private String transferExternalId;
-    private String purchasePriceRatio;
-    private LocalDate settlementDate;
-    private ExternalTransferStatus status;
-    private ExternalTransferSubStatus subStatus;
-    private LocalDate effectiveFrom;
-    private LocalDate effectiveTo;
+    public LoanProductHelper() {}
+
+    public PostLoanProductsResponse createLoanProduct(PostLoanProductsRequest request) {
+        return ok(fineract().loanProducts.createLoanProduct(request));
+    }
 }
