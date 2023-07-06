@@ -383,6 +383,13 @@ public class AccountingProcessorHelper {
             }
         }
 
+        System.out.println("++++++++++++++++++++++++++++++++++++++++++++++++++++");
+        System.out.println("Total amount: "+totalAmount);
+        System.out.println("Total credited amount: "+totalCreditedAmount);
+        System.out.println(Arrays.toString(chargePaymentDTOs.toArray()));
+        System.out.println(Arrays.toString(creditDetailsMap.entrySet().toArray()));
+        System.out.println("++++++++++++++++++++++++++++++++++++++++++++++++++++");
+
         if (totalAmount.compareTo(totalCreditedAmount) != 0) {
             throw new PlatformDataIntegrityException(
                     "Meltdown in advanced accounting...sum of all charges is not equal to the fee charge for a transaction",
