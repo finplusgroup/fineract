@@ -48,9 +48,9 @@ services:
       retries: 10
     ports:
       - 8443:8443
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-#    network_mode: "host"
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
+    network_mode: "host"
 #    depends_on:
 #      fineractpostgresql:
 #        condition: service_healthy
@@ -87,7 +87,7 @@ services:
       - FINERACT_HIKARI_DS_PROPERTIES_LOG_SLOW_QUERIES=true
       - FINERACT_HIKARI_DS_PROPERTIES_DUMP_QUERIES_IN_EXCEPTION=true
       # NOTE: env vars prefixed "FINERACT_DEFAULT_TENANTDB_*" are used to create the default tenant database
-      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=host.docker.internal:host-gateway
+      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=localhost
       - FINERACT_DEFAULT_TENANTDB_PORT=5432
       - FINERACT_DEFAULT_TENANTDB_UID=fineract
       - FINERACT_DEFAULT_TENANTDB_PWD=fineract
