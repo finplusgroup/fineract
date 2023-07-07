@@ -48,6 +48,8 @@ services:
       retries: 10
     ports:
       - 8443:8443
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 #    depends_on:
 #      fineractpostgresql:
 #        condition: service_healthy
