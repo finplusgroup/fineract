@@ -46,8 +46,8 @@ services:
       test: ["CMD", 'sh', '-c', 'echo -e "Checking for the availability of Fineract server deployment"; while ! nc -z "fineract-server" 8443; do sleep 1; printf "-"; done; echo -e " >> Fineract server has started";' ]
       timeout: 10s
       retries: 10
-    ports:
-      - 8443:8443
+#    ports:
+#      - 8443:8443
 #    extra_hosts:
 #      - "host.docker.internal:host-gateway"
     network_mode: "host"
