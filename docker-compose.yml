@@ -33,6 +33,7 @@ services:
       FINERACT_TENANTS_DB_NAME: fineract_tenants
       FINERACT_TENANT_DEFAULT_DB_NAME: fineract_default
     healthcheck:
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
       test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
       timeout: 10s
       retries: 10

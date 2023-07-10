@@ -10,15 +10,15 @@ jobs:
 
     services:
         mariad:
-            image: mariadb:10.11
+            image: mariadb:11.0
             ports:
                 - 3306:3306
             env:
                 MARIADB_ROOT_PASSWORD: mysql
-            options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+            options: --health-cmd="healthcheck.sh --su-mysql --connect --innodb_initialized" --health-interval=5s --health-timeout=2s --health-retries=3
 
         mock-oauth2-server:
-          image: ghcr.io/navikt/mock-oauth2-server:0.5.8
+          image: ghcr.io/navikt/mock-oauth2-server:0.5.9
           ports:
             - 9000:9000
           env:
@@ -37,13 +37,13 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
           cache: gradle
-      - uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c # tag=v3
+      - uses: actions/setup-node@e33196f7422957bea03ed53f6fbb155025ffc7b8 # tag=v3
         with:
           node-version: 16
       - name: Congfigure vega-cli
         run: npm i -g vega-cli --unsafe
       - name: Validate Gradle wrapper
-        uses: gradle/wrapper-validation-action@ccb4328a959376b642e027874838f60f8e596de3
+        uses: gradle/wrapper-validation-action@064a97fb0b4cef86a65f09898c572382f3af10e0
       - name: Verify MariaDB connection
         run: |
             while ! mysqladmin ping -h"127.0.0.1" -P3306 ; do
