@@ -49,7 +49,7 @@ services:
     ports:
       - 9000:8443
     extra_hosts:
-      - "host.docker.internal:172.17.0.1"
+      - "host.docker.internal:52.29.0.90"
 #    depends_on:
 #      fineractpostgresql:
 #        condition: service_healthy
