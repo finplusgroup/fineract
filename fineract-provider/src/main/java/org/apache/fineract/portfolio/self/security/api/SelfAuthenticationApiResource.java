@@ -25,31 +25,25 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.security.api.AuthenticationApiResource;
 import org.apache.fineract.infrastructure.security.api.AuthenticationApiResourceSwagger;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
 @Component
-@Scope("singleton")
 @ConditionalOnProperty("fineract.security.basicauth.enabled")
-@Path("/self/authentication")
+@Path("/v1/self/authentication")
 @Tag(name = "Self Authentication", description = "Authenticates the credentials provided and returns the set roles and permissions allowed")
+@RequiredArgsConstructor
 public class SelfAuthenticationApiResource {
 
     private final AuthenticationApiResource authenticationApiResource;
-
-    @Autowired
-    public SelfAuthenticationApiResource(final AuthenticationApiResource authenticationApiResource) {
-        this.authenticationApiResource = authenticationApiResource;
-    }
 
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })

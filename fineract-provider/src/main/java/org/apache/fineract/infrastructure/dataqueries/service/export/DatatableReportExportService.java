@@ -18,8 +18,8 @@
  */
 package org.apache.fineract.infrastructure.dataqueries.service.export;
 
+import jakarta.ws.rs.core.MultivaluedMap;
 import java.util.Map;
-import javax.ws.rs.core.MultivaluedMap;
 import org.apache.fineract.infrastructure.dataqueries.service.DatatableExportTargetParameter;
 
 public interface DatatableReportExportService {

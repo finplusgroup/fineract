@@ -116,4 +116,21 @@
     <include file="parts/0094_add_external_event_default_configuration.xml" relativeToChangelogFile="true" />
     <include file="parts/0095_add_delinquency_and_arrears_display_configuration.xml" relativeToChangelogFile="true" />
     <include file="parts/0096_modify_created_and_sent_at_date_external_events.xml" relativeToChangelogFile="true" />
+    <include file="parts/0097_update_accounting_summary_table_reports.xml" relativeToChangelogFile="true" />
+    <include file="parts/0098_update_transaction_summary_table_report.xml" relativeToChangelogFile="true" />
+    <include file="parts/0099_add_accrual_transaction_external_event_configuration.xml" relativeToChangelogFile="true" />
+    <include file="parts/0100_new_repayment_strategy.xml" relativeToChangelogFile="true" />
+    <include file="parts/0101_update_transaction_summary_table_report.xml" relativeToChangelogFile="true" />
+    <include file="parts/0102_add_external_event_for_loan_reschedule.xml" relativeToChangelogFile="true" />
+    <include file="parts/0103_modify_parameter_json_column_custom_job_parameters.xml" relativeToChangelogFile="true" />
+    <include file="parts/0104_loan_product_add_repayment_overdue_days_config.xml" relativeToChangelogFile="true" />
+    <include file="parts/0105_add_indices_loan_table.xml" relativeToChangelogFile="true" />
+    <include file="parts/0106_new_repayment_strategy.xml" relativeToChangelogFile="true" />
+    <include file="parts/0107_add_configuration_charges_accrual_date.xml" relativeToChangelogFile="true" />
+    <include file="parts/0108_precondition_check_cob_loan_account_lock.xml" relativeToChangelogFile="true" />
+    <include file="parts/0109_spring_batch_5_upgrade.xml" relativeToChangelogFile="true" />
+    <include file="parts/0110_trial_balance_summary_with_asset_owner.xml" relativeToChangelogFile="true" />
+    <include file="parts/0111_transaction_summary_with_asset_owner.xml" relativeToChangelogFile="true" />
+    <include file="parts/0112_transaction_summary_with_asset_owner_change_report_sql.xml" relativeToChangelogFile="true" />
+    <include file="parts/0113_transaction_summary_with_asset_owner_report_sql_fix.xml" relativeToChangelogFile="true" />
 </databaseChangeLog>

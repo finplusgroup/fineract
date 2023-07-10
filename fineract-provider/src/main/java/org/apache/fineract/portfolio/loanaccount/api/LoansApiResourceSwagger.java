@@ -421,7 +421,7 @@ final class LoansApiResourceSwagger {
                 @Schema(example = "1")
                 public Integer id;
                 @Schema(example = "000000001")
-                public Long accountNo;
+                public String accountNo;
             }
 
             static final class GetLoansLoanIdOverdueCharges {
@@ -690,6 +690,8 @@ final class LoansApiResourceSwagger {
                 public boolean creditBalanceRefund;
                 @Schema(example = "false")
                 public boolean chargeAdjustment;
+                @Schema(example = "false")
+                public boolean chargeoff;
             }
 
             static final class GetLoansLoanIdPaymentDetailData {
@@ -991,7 +993,7 @@ final class LoansApiResourceSwagger {
         @Schema(example = "95174ff9-1a75-4d72-a413-6f9b1cb988b7")
         public String externalId;
         @Schema(example = "000000001")
-        public Long accountNo;
+        public String accountNo;
         public GetLoansLoanIdStatus status;
         @Schema(example = "false")
         public boolean disallowExpectedDisbursements;
@@ -1070,6 +1072,8 @@ final class LoansApiResourceSwagger {
         public LocalDate overpaidOnDate;
         @Schema(example = "false")
         public Boolean chargedOff;
+        @Schema(example = "3")
+        public Integer inArrearsTolerance;
     }
 
     @Schema(description = "GetLoansResponse")

@@ -18,15 +18,17 @@
  */
 package org.apache.fineract.infrastructure.creditbureau.service;
 
-import static javax.ws.rs.core.HttpHeaders.CONTENT_TYPE;
-import static javax.ws.rs.core.MediaType.APPLICATION_FORM_URLENCODED;
-import static javax.ws.rs.core.MediaType.MULTIPART_FORM_DATA;
+import static jakarta.ws.rs.core.HttpHeaders.CONTENT_TYPE;
+import static jakarta.ws.rs.core.MediaType.APPLICATION_FORM_URLENCODED;
+import static jakarta.ws.rs.core.MediaType.MULTIPART_FORM_DATA;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import jakarta.annotation.Nullable;
+import jakarta.validation.constraints.NotNull;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -37,8 +39,6 @@ import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import javax.annotation.Nullable;
-import javax.validation.constraints.NotNull;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -125,11 +125,11 @@ public class ThitsaWorksCreditBureauIntegrationWritePlatformServiceImpl implemen
         Request request = null;
         Request.Builder baseRequestBuilder = createRequestBuilder(subscriptionKey, subscriptionId, token, okHttpUrl);
         switch (process) {
-            case UPLOAD_CREDIT_REPORT -> request = createRequest(baseRequestBuilder, () -> new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", fileData.getFileName(), RequestBody.create(file, MediaType.parse("multipart/form-data")))
-                    .addFormDataPart("BODY", "formdata").addFormDataPart("userName", userName).build(),
-                    (requestBody, builder) -> builder.header(CONTENT_TYPE, MULTIPART_FORM_DATA).post(requestBody).build());
+            case UPLOAD_CREDIT_REPORT ->
+                request = createRequest(baseRequestBuilder, () -> new MultipartBody.Builder().setType(MultipartBody.FORM)
+                        .addFormDataPart("file", fileData.getFileName(), RequestBody.create(file, MediaType.parse("multipart/form-data")))
+                        .addFormDataPart("BODY", "formdata").addFormDataPart("userName", userName).build(),
+                        (requestBody, builder) -> builder.header(CONTENT_TYPE, MULTIPART_FORM_DATA).post(requestBody).build());
             case "CreditReport" -> request = createRequest(baseRequestBuilder,
                     builder -> builder.header(CONTENT_TYPE, APPLICATION_FORM_URLENCODED).get().build());
             case "token" -> request = createRequest(baseRequestBuilder,

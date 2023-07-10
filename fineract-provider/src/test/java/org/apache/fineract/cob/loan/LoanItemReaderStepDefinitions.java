@@ -21,15 +21,26 @@ package org.apache.fineract.cob.loan;
 import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.base.Splitter;
 import io.cucumber.java8.En;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import org.apache.fineract.cob.common.CustomJobParameterResolver;
+import org.apache.fineract.cob.data.LoanCOBParameter;
+import org.apache.fineract.cob.domain.LoanAccountLock;
+import org.apache.fineract.cob.domain.LockOwner;
 import org.apache.fineract.cob.exceptions.LoanReadException;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.springframework.batch.core.JobExecution;
@@ -40,43 +51,63 @@ public class LoanItemReaderStepDefinitions implements En {
 
     private LoanRepository loanRepository = mock(LoanRepository.class);
 
-    private LoanItemReader loanItemReader = new LoanItemReader(loanRepository);
+    private RetrieveLoanIdService retrieveLoanIdService = mock(RetrieveLoanIdService.class);
+
+    private CustomJobParameterResolver customJobParameterResolver = mock(CustomJobParameterResolver.class);
+
+    private LoanLockingService lockingService = mock(LoanLockingService.class);
+
+    private LoanItemReader loanItemReader = new LoanItemReader(loanRepository, retrieveLoanIdService, customJobParameterResolver,
+            lockingService);
 
     private Loan loan = mock(Loan.class);
 
     private Loan resultItem;
 
     public LoanItemReaderStepDefinitions() {
-        Given("/^The LoanItemReader.read method with loanIds (.*), lockedAccounts (.*)$/", (String loanIds, String lockedAccounts) -> {
+        Given("/^The LoanItemReader.read method with loanIds (.*)$/", (String loanIds) -> {
             JobExecution jobExecution = new JobExecution(1L);
             ExecutionContext jobExecutionContext = new ExecutionContext();
-            List<Long> splitLockedAccounts;
-            if (lockedAccounts.isEmpty()) {
-                splitLockedAccounts = new ArrayList<>();
-            } else {
-                List<String> splitLockedAccountsStr = Splitter.on(',').splitToList(lockedAccounts);
-                splitLockedAccounts = splitLockedAccountsStr.stream().map(Long::parseLong).toList();
-            }
-            jobExecutionContext.put(LoanCOBConstant.ALREADY_LOCKED_BY_INLINE_COB_OR_PROCESSED_LOAN_IDS,
-                    new ArrayList<>(splitLockedAccounts));
             jobExecution.setExecutionContext(jobExecutionContext);
             StepExecution stepExecution = new StepExecution("test", jobExecution);
             ExecutionContext stepExecutionContext = new ExecutionContext();
-            List<Long> splitAccounts;
-            if (loanIds.isEmpty()) {
-                splitAccounts = new ArrayList<>();
-            } else {
+            Long minLoanId = null;
+            Long maxLoanId = null;
+            List<Long> splitAccounts = new ArrayList<>();
+            if (!loanIds.isEmpty()) {
                 List<String> splitStr = Splitter.on(',').splitToList(loanIds);
-                splitAccounts = splitStr.stream().map(Long::parseLong).toList();
+                splitAccounts = splitStr.stream().map(Long::parseLong).collect(Collectors.toList());
+                minLoanId = splitAccounts.get(0);
+                maxLoanId = splitAccounts.get(splitAccounts.size() - 1);
             }
-            stepExecutionContext.put(LoanCOBConstant.LOAN_IDS, new ArrayList<>(splitAccounts));
+            LoanCOBParameter loanCOBParameter = new LoanCOBParameter(minLoanId, maxLoanId);
+            stepExecutionContext.put(LoanCOBConstant.LOAN_COB_PARAMETER, loanCOBParameter);
             stepExecution.setExecutionContext(stepExecutionContext);
+
+            lenient().when(
+                    this.retrieveLoanIdService.retrieveAllNonClosedLoansByLastClosedBusinessDateAndMinAndMaxLoanId(loanCOBParameter, false))
+                    .thenReturn(splitAccounts);
+
+            HashMap<BusinessDateType, LocalDate> businessDates = new HashMap<>();
+            LocalDate businessDate = LocalDate.now(ZoneId.systemDefault());
+            businessDates.put(BusinessDateType.BUSINESS_DATE, businessDate);
+            businessDates.put(BusinessDateType.COB_DATE, businessDate.minusDays(1));
+            ThreadLocalContextUtil.setBusinessDates(businessDates);
+            LoanAccountLock loanAccountLock = new LoanAccountLock(1L, LockOwner.LOAN_COB_CHUNK_PROCESSING, businessDate.minusDays(1));
+            LoanAccountLock loanAccountLockNegativeNumberTest = new LoanAccountLock(-1L, LockOwner.LOAN_COB_CHUNK_PROCESSING,
+                    businessDate.minusDays(1));
+            lenient().when(customJobParameterResolver.getCustomJobParameterSet(any())).thenReturn(Optional.empty());
+            lenient().when(lockingService.findAllByLoanIdInAndLockOwner(List.of(1L), LockOwner.LOAN_COB_CHUNK_PROCESSING))
+                    .thenReturn(List.of(loanAccountLock));
+            lenient().when(lockingService.findAllByLoanIdInAndLockOwner(List.of(1L, 2L), LockOwner.LOAN_COB_CHUNK_PROCESSING))
+                    .thenReturn(List.of(loanAccountLock));
+            lenient().when(lockingService.findAllByLoanIdInAndLockOwner(List.of(-1L), LockOwner.LOAN_COB_CHUNK_PROCESSING))
+                    .thenReturn(List.of(loanAccountLockNegativeNumberTest));
+
             loanItemReader.beforeStep(stepExecution);
 
-            lenient().when(this.loanRepository.findById(0L)).thenReturn(Optional.empty());
             lenient().when(this.loanRepository.findById(1L)).thenReturn(Optional.of(loan));
             lenient().when(this.loanRepository.findById(-1L)).thenThrow(new RuntimeException("fail"));
-
         });
 
         When("LoanItemReader.read method executed", () -> {

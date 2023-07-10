@@ -18,27 +18,31 @@
  */
 package org.apache.fineract.cob.api;
 
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.cob.domain.LoanAccountLock;
 import org.apache.fineract.cob.domain.LoanAccountLockRepository;
 import org.apache.fineract.cob.domain.LockOwner;
+import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @Profile("test")
 @Component
-@Path("/internal/loans")
+@Path("/v1/internal/loans")
 @RequiredArgsConstructor
 @Slf4j
 public class InternalLoanAccountLockApiResource implements InitializingBean {
@@ -62,15 +66,21 @@ public class InternalLoanAccountLockApiResource implements InitializingBean {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces({ MediaType.APPLICATION_JSON })
     public Response placeLockOnLoanAccount(@Context final UriInfo uriInfo, @PathParam("loanId") Long loanId,
-            @PathParam("lockOwner") String lockOwner) {
+            @PathParam("lockOwner") String lockOwner, @RequestBody(required = false) String error) {
         log.warn("------------------------------------------------------------");
         log.warn("                                                            ");
         log.warn("Placing lock on loan: {}", loanId);
         log.warn("                                                            ");
         log.warn("------------------------------------------------------------");
 
-        LoanAccountLock loanAccountLock = new LoanAccountLock(loanId, LockOwner.valueOf(lockOwner));
+        LoanAccountLock loanAccountLock = new LoanAccountLock(loanId, LockOwner.valueOf(lockOwner),
+                ThreadLocalContextUtil.getBusinessDateByType(BusinessDateType.COB_DATE));
+
+        if (StringUtils.isNotBlank(error)) {
+            loanAccountLock.setError(error, error);
+        }
         loanAccountLockRepository.save(loanAccountLock);
         return Response.status(Response.Status.ACCEPTED).build();
     }
+
 }

@@ -16,14 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+plugins {
+    id 'org.openapi.generator' version '6.6.0'
+}
 description = 'Fineract Client'
 
-apply plugin: 'org.openapi.generator'
-
 apply from: 'dependencies.gradle'
-
-// enable when all tests are migrated
-tasks.cucumber.onlyIf {false}
 
 // TODO: @vidakovic we should publish this lib to Maven Central; do in separate PR
 
@@ -31,7 +29,7 @@ openApiMeta {
     generatorName = 'Fineract'
     packageName = 'org.apache.fineract.client'
     outputFolder = "$buildDir/meta".toString()
-    // trick to make sure fineract.yaml is generated first
+    // trick to make sure fineract.json is generated first
 }
 
 openApiValidate {

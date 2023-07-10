@@ -19,7 +19,7 @@
 // TODO: this is work in progress, please follow FINERACT-1171
 buildscript {
     ext {
-        jacocoVersion = '0.8.8'
+        jacocoVersion = '0.8.10'
         retrofitVersion = '2.9.0'
         okhttpVersion = '4.9.3'
         oltuVersion = '1.0.1'
@@ -27,7 +27,10 @@ buildscript {
         fineractJavaProjects = subprojects.findAll{
             [
                 'fineract-api',
+                'fineract-core',
                 'fineract-provider',
+                'fineract-investor',
+                'fineract-loan',
                 'integration-tests',
                 'twofactor-tests',
                 'oauth2-tests',
@@ -38,7 +41,10 @@ buildscript {
         fineractPublishProjects = subprojects.findAll{
             [
                 'fineract-avro-schemas',
-                'fineract-client'
+                'fineract-client',
+                'fineract-provider',
+                'fineract-investor',
+                'fineract-loan'
             ].contains(it.name)
         }
         npmRepository = 'https://npm.pkg.github.com'
@@ -49,24 +55,26 @@ buildscript {
 
     dependencies {
         classpath 'com.bmuschko:gradle-cargo-plugin:2.9.0'
-        classpath 'org.eclipse.persistence:eclipselink:2.7.10'
-        classpath 'jakarta.ws.rs:jakarta.ws.rs-api:2.1.6'
+        classpath 'org.eclipse.persistence:eclipselink:4.0.0'
+        classpath 'jakarta.ws.rs:jakarta.ws.rs-api:3.1.0'
         classpath 'com.google.cloud.tools:jib-layer-filter-extension-gradle:0.3.0'
+        classpath 'org.apache.commons:commons-lang3:3.12.0'
+        classpath 'io.swagger.core.v3:swagger-jaxrs2-jakarta:2.2.11'
+        classpath 'jakarta.servlet:jakarta.servlet-api:6.0.0'
     }
 }
 
 plugins {
     id "org.barfuin.gradle.taskinfo" version "2.1.0"
     id 'com.adarshr.test-logger' version '3.2.0'
-    id 'com.diffplug.spotless' version '6.15.0' apply false
+    id 'com.diffplug.spotless' version '6.19.0' apply false
     id 'org.nosphere.apache.rat' version '0.8.0' apply false
     id 'com.github.hierynomus.license' version '0.16.1' apply false
-    id 'com.github.jk1.dependency-license-report' version '2.1' apply false
-    id 'org.openapi.generator' version '6.2.1' apply false
+    id 'com.github.jk1.dependency-license-report' version '2.5' apply false
     id 'org.zeroturnaround.gradle.jrebel' version '1.1.12' apply false
-    id 'org.springframework.boot' version '2.7.9' apply false
-    id 'net.ltgt.errorprone' version '3.0.1' apply false
-    id 'io.swagger.core.v3.swagger-gradle-plugin' version '2.2.8' apply false
+    id 'org.springframework.boot' version '3.1.1' apply false
+    id 'net.ltgt.errorprone' version '3.1.0' apply false
+    id 'io.swagger.core.v3.swagger-gradle-plugin' version '2.2.11' apply false
     id 'com.gorylenko.gradle-git-properties' version '2.4.1' apply false
     id 'org.asciidoctor.jvm.convert' version '3.3.2' apply false
     id 'org.asciidoctor.jvm.pdf' version '3.3.2' apply false
@@ -74,13 +82,13 @@ plugins {
     id 'org.asciidoctor.jvm.revealjs' version '3.3.2' apply false
     id 'org.asciidoctor.jvm.gems' version '3.3.2' apply false
     id 'org.asciidoctor.kindlegen.base' version '3.2.0' apply false
-    id 'com.google.cloud.tools.jib' version '3.3.1' apply false
+    id 'com.google.cloud.tools.jib' version '3.3.2' apply false
     id 'fr.brouillard.oss.gradle.jgitver' version '0.10.0-rc03'
-    id 'org.sonarqube' version '4.0.0.2929'
-    id 'com.github.andygoossens.modernizer' version '1.7.0' apply false
-    id 'com.github.spotbugs' version '5.0.13' apply false
+    id 'org.sonarqube' version '4.2.1.3168'
+    id 'com.github.andygoossens.modernizer' version '1.8.0' apply false
+    id 'com.github.spotbugs' version '5.0.14' apply false
     id 'se.thinkcode.cucumber-runner' version '0.0.11' apply false
-    id "com.github.davidmc24.gradle.plugin.avro-base" version "1.6.0" apply false
+    id "com.github.davidmc24.gradle.plugin.avro-base" version "1.7.1" apply false
 }
 
 apply from: "${rootDir}/buildSrc/src/main/groovy/org.apache.fineract.release.gradle"
@@ -89,8 +97,8 @@ description = '''\
 Run as:
 gradle clean bootRun'''
 
-ext['groovy.version'] = '3.0.10'
-ext['swaggerFile'] = "$rootDir/fineract-provider/build/classes/java/main/static/fineract.yaml".toString()
+ext['groovy.version'] = '4.0.6'
+ext['swaggerFile'] = "$rootDir/fineract-provider/build/classes/java/main/static/fineract.json".toString()
 
 allprojects  {
     group = 'org.apache.fineract'
@@ -180,6 +188,7 @@ allprojects  {
             '**/*.github/**',
             '**/MANIFEST.MF',
             '**/spring.factories',
+            '**/org.springframework.boot.autoconfigure.AutoConfiguration.imports',
             '**/*.json',
             '**/*.json.template',
             '**/*.txt',
@@ -282,7 +291,6 @@ configure(project.fineractJavaProjects) {
     apply plugin: 'net.ltgt.errorprone'
     apply plugin: 'com.github.spotbugs'
     apply plugin: 'com.github.andygoossens.modernizer'
-    apply plugin: 'se.thinkcode.cucumber-runner'
     apply from: "${rootDir}/buildSrc/src/main/groovy/org.apache.fineract.dependencies.gradle"
 
     group = 'org.apache.fineract'
@@ -293,14 +301,16 @@ configure(project.fineractJavaProjects) {
     targetCompatibility = JavaVersion.VERSION_17
 
     /* http://stackoverflow.com/questions/19653311/jpa-repository-works-in-idea-and-production-but-not-in-gradle */
-    sourceSets.main.output.resourcesDir = sourceSets.main.java.outputDir
-    sourceSets.test.output.resourcesDir = sourceSets.test.java.outputDir
+    sourceSets.main.output.resourcesDir = sourceSets.main.java.classesDirectory
+    sourceSets.test.output.resourcesDir = sourceSets.test.java.classesDirectory
 
     configurations {
         implementation.setCanBeResolved(true)
         api.setCanBeResolved(true)
     }
-
+    tasks.withType(Copy) {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    }
     tasks.withType(JavaCompile) {
         options.compilerArgs += [
             "-Xlint:unchecked",
@@ -396,7 +406,7 @@ configure(project.fineractJavaProjects) {
     // Configuration for the Checkstyle plugin
     // https://docs.gradle.org/current/userguide/checkstyle_plugin.html
     dependencies {
-        checkstyle 'com.puppycrawl.tools:checkstyle:10.8.1'
+        checkstyle 'com.puppycrawl.tools:checkstyle:10.12.1'
         checkstyle 'com.github.sevntu-checkstyle:sevntu-checks:1.44.1'
     }
 
@@ -404,13 +414,13 @@ configure(project.fineractJavaProjects) {
     // https://www.eclemma.org/jacoco/
     jacoco {
         toolVersion = jacocoVersion
-        reportsDir = file("$buildDir/reports/jacoco")
+        reportsDirectory = file("$buildDir/reports/jacoco")
     }
 
     jacocoTestReport {
         reports {
-            html.enabled=true
-            xml.enabled=true
+            html.required = true
+            xml.required = true
             html.destination file("${buildDir}/code-coverage")
         }
     }
@@ -418,11 +428,12 @@ configure(project.fineractJavaProjects) {
     // Configuration for the errorprone plugin
     // https://github.com/tbroyer/gradle-errorprone-plugin
     dependencies {
-        errorprone "com.google.errorprone:error_prone_core:2.18.0"
+        errorprone "com.google.errorprone:error_prone_core:2.20.0"
     }
 
     tasks.withType(JavaCompile) {
         options.errorprone {
+            enabled = project.gradle.startParameter.taskNames.contains('build') || project.gradle.startParameter.taskNames.contains('check')
             disableWarningsInGeneratedCode = true
             excludedPaths = ".*/build/.*"
             disable(
@@ -521,7 +532,7 @@ configure(project.fineractJavaProjects) {
         }
     }
 
-    compileJava {
+    check {
         dependsOn(rat, licenseMain, licenseTest)
     }
 
@@ -548,11 +559,7 @@ configure(project.fineractJavaProjects) {
                 'org.bouncycastle:bcprov-jdk15to18',
                 'org.awaitility:awaitility',
                 'com.google.truth:truth',
-                'com.google.truth.extensions:truth-java8-extension',
-                'io.cucumber:cucumber-core',
-                'io.cucumber:cucumber-java',
-                'io.cucumber:cucumber-java8',
-                'io.cucumber:cucumber-junit-platform-engine',
+                'com.google.truth.extensions:truth-java8-extension'
                 )
     }
 
@@ -568,12 +575,6 @@ configure(project.fineractJavaProjects) {
 
     testlogger {
         logLevel 'quiet'
-    }
-
-    cucumber {
-        tags = 'not @ignore'
-        main = 'io.cucumber.core.cli.Main'
-        shorten = 'argfile'
     }
 
     // Configuration for spotbugs plugin
@@ -610,6 +611,10 @@ configure(project.fineractJavaProjects) {
         violationLogLevel="error"
         javaVersion = project.targetCompatibility
         ignoreGeneratedClasses = true
+        // Rules can be found here: https://github.com/gaul/modernizer-maven-plugin/blob/master/modernizer-maven-plugin/src/main/resources/modernizer.xml
+        exclusions = [
+            'java/util/Optional.get:()Ljava/lang/Object;' // Disable forcing the usage of Optional.orElseThrow(java.util.function.Supplier<? extends X>)
+        ]
     }
 }
 

@@ -20,8 +20,24 @@ package org.apache.fineract.cob.loan;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.apache.fineract.cob.data.LoanCOBParameter;
+import org.apache.fineract.cob.data.LoanCOBPartition;
+import org.apache.fineract.cob.data.LoanIdAndExternalIdAndAccountNo;
+import org.apache.fineract.cob.data.LoanIdAndLastClosedBusinessDate;
+import org.springframework.data.repository.query.Param;
 
 public interface RetrieveLoanIdService {
 
-    List<Long> retrieveLoanIdsNDaysBehind(Long numberOfDays, LocalDate businessDate);
+    List<LoanCOBPartition> retrieveLoanCOBPartitions(Long numberOfDays, LocalDate businessDate, boolean isCatchUp, int partitionSize);
+
+    List<LoanIdAndLastClosedBusinessDate> retrieveLoanIdsBehindDate(LocalDate businessDate, List<Long> loanIds);
+
+    List<LoanIdAndLastClosedBusinessDate> retrieveLoanIdsBehindDateOrNull(LocalDate businessDate, List<Long> loanIds);
+
+    List<LoanIdAndLastClosedBusinessDate> retrieveLoanIdsOldestCobProcessed(LocalDate businessDate);
+
+    List<Long> retrieveAllNonClosedLoansByLastClosedBusinessDateAndMinAndMaxLoanId(LoanCOBParameter loanCOBParameter, boolean isCatchUp);
+
+    List<LoanIdAndExternalIdAndAccountNo> findAllStayedLockedByCobBusinessDate(@Param("cobBusinessDate") LocalDate cobBusinessDate);
+
 }

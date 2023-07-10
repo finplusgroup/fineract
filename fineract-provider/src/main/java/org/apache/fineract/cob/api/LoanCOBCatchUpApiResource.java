@@ -24,13 +24,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.cob.data.IsCatchUpRunningDTO;
 import org.apache.fineract.cob.data.OldestCOBProcessedLoanDTO;
@@ -38,7 +38,7 @@ import org.apache.fineract.cob.service.LoanCOBCatchUpService;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.springframework.stereotype.Component;
 
-@Path("/loans")
+@Path("/v1/loans")
 @Component
 @Tag(name = "Loan COB Catch Up", description = "")
 @RequiredArgsConstructor
@@ -57,7 +57,6 @@ public class LoanCOBCatchUpApiResource {
             @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = LoanCOBCatchUpApiResourceSwagger.GetOldestCOBProcessedLoanResponse.class))) })
     public String getOldestCOBProcessedLoan() {
         OldestCOBProcessedLoanDTO response = loanCOBCatchUpService.getOldestCOBProcessedLoan();
-
         return oldestCOBProcessedLoanSerializeService.serialize(response);
     }
 
@@ -73,6 +72,7 @@ public class LoanCOBCatchUpApiResource {
         if (loanCOBCatchUpService.isCatchUpRunning().isCatchUpRunning()) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
+        loanCOBCatchUpService.unlockHardLockedLoans();
         OldestCOBProcessedLoanDTO oldestCOBProcessedLoan = loanCOBCatchUpService.getOldestCOBProcessedLoan();
         if (oldestCOBProcessedLoan.getCobProcessedDate().equals(oldestCOBProcessedLoan.getCobBusinessDate())) {
             return Response.status(Response.Status.OK).build();

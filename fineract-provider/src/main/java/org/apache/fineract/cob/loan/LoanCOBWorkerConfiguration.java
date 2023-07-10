@@ -19,9 +19,9 @@
 package org.apache.fineract.cob.loan;
 
 import org.apache.fineract.cob.COBBusinessStepService;
+import org.apache.fineract.cob.common.CustomJobParameterResolver;
 import org.apache.fineract.cob.common.InitialisationTasklet;
 import org.apache.fineract.cob.common.ResetContextTasklet;
-import org.apache.fineract.cob.domain.LoanAccountLockRepository;
 import org.apache.fineract.cob.listener.ChunkProcessingLoanItemListener;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
@@ -30,11 +30,11 @@ import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.useradministration.domain.AppUserRepositoryWrapper;
 import org.springframework.batch.core.Step;
-import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.FlowBuilder;
 import org.springframework.batch.core.job.flow.Flow;
-import org.springframework.batch.core.listener.ExecutionContextPromotionListener;
+import org.springframework.batch.core.repository.JobRepository;
+import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.integration.partition.RemotePartitioningWorkerStepBuilderFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +42,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.channel.QueueChannel;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
@@ -49,10 +50,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class LoanCOBWorkerConfiguration {
 
     @Autowired
+    private JobRepository jobRepository;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+    @Autowired
     private RemotePartitioningWorkerStepBuilderFactory stepBuilderFactory;
 
-    @Autowired
-    private StepBuilderFactory localStepBuilderFactory;
     @Autowired
     private PropertyService propertyService;
     @Autowired
@@ -62,14 +65,19 @@ public class LoanCOBWorkerConfiguration {
     @Autowired
     private COBBusinessStepService cobBusinessStepService;
     @Autowired
-    private LoanAccountLockRepository accountLockRepository;
-    @Autowired
     private AppUserRepositoryWrapper userRepository;
     @Autowired
     private TransactionTemplate transactionTemplate;
+    @Autowired
+    private RetrieveLoanIdService retrieveLoanIdService;
 
     @Autowired
     private FineractProperties fineractProperties;
+    @Autowired
+    private LoanLockingService loanLockingService;
+
+    @Autowired
+    private CustomJobParameterResolver customJobParameterResolver;
 
     @Bean(name = LoanCOBConstant.LOAN_COB_WORKER_STEP)
     public Step loanCOBWorkerStep() {
@@ -85,29 +93,30 @@ public class LoanCOBWorkerConfiguration {
     @Bean
     @StepScope
     public Step initialisationStep(@Value("#{stepExecutionContext['partition']}") String partitionName) {
-        return localStepBuilderFactory.get("Initialisation - Step:" + partitionName).tasklet(initialiseContext()).build();
+        return new StepBuilder("Initialisation - Step:" + partitionName, jobRepository).tasklet(initialiseContext(), transactionManager)
+                .build();
     }
 
     @Bean
     @StepScope
     public Step loanBusinessStep(@Value("#{stepExecutionContext['partition']}") String partitionName) {
-        return localStepBuilderFactory.get("Loan Business - Step:" + partitionName)
-                .<Loan, Loan>chunk(propertyService.getChunkSize(JobName.LOAN_COB.name())).reader(cobWorkerItemReader())
-                .processor(cobWorkerItemProcessor()).writer(cobWorkerItemWriter()).faultTolerant().skip(Exception.class)
-                .skipLimit(propertyService.getChunkSize(JobName.LOAN_COB.name()) + 1).listener(loanItemListener())
-                .listener(promotionListener()).build();
+        return new StepBuilder("Loan Business - Step:" + partitionName, jobRepository)
+                .<Loan, Loan>chunk(propertyService.getChunkSize(JobName.LOAN_COB.name()), transactionManager).reader(cobWorkerItemReader())
+                .processor(cobWorkerItemProcessor()).writer(cobWorkerItemWriter()).faultTolerant().retry(Exception.class)
+                .retryLimit(propertyService.getRetryLimit(LoanCOBConstant.JOB_NAME)).skip(Exception.class)
+                .skipLimit(propertyService.getChunkSize(JobName.LOAN_COB.name()) + 1).listener(loanItemListener()).build();
     }
 
     @Bean
     @StepScope
     public Step applyLockStep(@Value("#{stepExecutionContext['partition']}") String partitionName) {
-        return localStepBuilderFactory.get("Apply lock - Step:" + partitionName).tasklet(applyLock()).listener(promotionListener()).build();
+        return new StepBuilder("Apply lock - Step:" + partitionName, jobRepository).tasklet(applyLock(), transactionManager).build();
     }
 
     @Bean
     @StepScope
     public Step resetContextStep(@Value("#{stepExecutionContext['partition']}") String partitionName) {
-        return localStepBuilderFactory.get("Reset context - Step:" + partitionName).tasklet(resetContext()).build();
+        return new StepBuilder("Reset context - Step:" + partitionName, jobRepository).tasklet(resetContext(), transactionManager).build();
     }
 
     @Bean
@@ -117,12 +126,13 @@ public class LoanCOBWorkerConfiguration {
 
     @Bean
     public ChunkProcessingLoanItemListener loanItemListener() {
-        return new ChunkProcessingLoanItemListener(accountLockRepository, transactionTemplate);
+        return new ChunkProcessingLoanItemListener(loanLockingService, transactionTemplate);
     }
 
     @Bean
     public ApplyLoanLockTasklet applyLock() {
-        return new ApplyLoanLockTasklet(accountLockRepository, fineractProperties);
+        return new ApplyLoanLockTasklet(fineractProperties, loanLockingService, retrieveLoanIdService, customJobParameterResolver,
+                transactionTemplate);
     }
 
     @Bean
@@ -133,7 +143,7 @@ public class LoanCOBWorkerConfiguration {
     @Bean
     @StepScope
     public LoanItemReader cobWorkerItemReader() {
-        return new LoanItemReader(loanRepository);
+        return new LoanItemReader(loanRepository, retrieveLoanIdService, customJobParameterResolver, loanLockingService);
     }
 
     @Bean
@@ -145,15 +155,8 @@ public class LoanCOBWorkerConfiguration {
     @Bean
     @StepScope
     public LoanItemWriter cobWorkerItemWriter() {
-        LoanItemWriter repositoryItemWriter = new LoanItemWriter(accountLockRepository);
+        LoanItemWriter repositoryItemWriter = new LoanItemWriter(loanLockingService);
         repositoryItemWriter.setRepository(loanRepository);
         return repositoryItemWriter;
-    }
-
-    @Bean
-    public ExecutionContextPromotionListener promotionListener() {
-        ExecutionContextPromotionListener listener = new ExecutionContextPromotionListener();
-        listener.setKeys(new String[] { LoanCOBConstant.ALREADY_LOCKED_BY_INLINE_COB_OR_PROCESSED_LOAN_IDS });
-        return listener;
     }
 }

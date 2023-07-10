@@ -21,37 +21,34 @@ package org.apache.fineract.infrastructure.instancemode.filter;
 import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.apache.fineract.infrastructure.instancemode.filter.FineractInstanceModeApiFilter.ExceptionListItem.item;
 
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.ws.rs.HttpMethod;
 import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.ws.rs.HttpMethod;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.ApiGlobalErrorResponse;
 import org.apache.http.HttpStatus;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
 @RequiredArgsConstructor
 public class FineractInstanceModeApiFilter extends OncePerRequestFilter {
 
-    private static final List<ExceptionListItem> EXCEPTION_LIST = List
-            .of(item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/jobs")),
-                    item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/scheduler")),
-                    item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/loans/catch-up")),
-                    item(FineractProperties.FineractModeProperties::isBatchManagerEnabled,
-                            pi -> pi.startsWith("/loans/is-catch-up-running")),
-                    item(p -> true, pi -> pi.startsWith("/instance-mode")),
-                    // Batches with all GET requests need to be allowed in read-only instances, hence this check will be
-                    // moved
-                    // under the Api Resource.
-                    item(p -> true, pi -> pi.startsWith("/batches")));
+    private static final List<ExceptionListItem> EXCEPTION_LIST = List.of(
+            item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/v1/jobs")),
+            item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/v1/scheduler")),
+            item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/v1/loans/catch-up")),
+            item(FineractProperties.FineractModeProperties::isBatchManagerEnabled, pi -> pi.startsWith("/v1/loans/is-catch-up-running")),
+            item(p -> true, pi -> pi.startsWith("/v1/instance-mode")),
+            // Batches with all GET requests need to be allowed in read-only instances, hence this check will be
+            // moved
+            // under the Api Resource.
+            item(p -> true, pi -> pi.startsWith("/v1/batches")));
 
     private final FineractProperties fineractProperties;
 

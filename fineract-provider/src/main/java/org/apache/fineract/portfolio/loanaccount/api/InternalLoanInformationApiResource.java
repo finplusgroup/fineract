@@ -23,16 +23,17 @@ import static org.apache.fineract.infrastructure.core.domain.AuditableFieldsCons
 import static org.apache.fineract.infrastructure.core.domain.AuditableFieldsConstants.LAST_MODIFIED_BY;
 import static org.apache.fineract.infrastructure.core.domain.AuditableFieldsConstants.LAST_MODIFIED_DATE;
 
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
@@ -48,14 +49,15 @@ import org.springframework.stereotype.Component;
 
 @Profile("test")
 @Component
-@Path("/internal/loan")
+@Path("/v1/internal/loan")
 @RequiredArgsConstructor
 @Slf4j
 public class InternalLoanInformationApiResource implements InitializingBean {
 
     private final LoanRepositoryWrapper loanRepositoryWrapper;
     private final LoanTransactionRepository loanTransactionRepository;
-    private final ToApiJsonSerializer<Map> toApiJsonSerializer;
+    private final ToApiJsonSerializer<Map> toApiJsonSerializerForMap;
+    private final ToApiJsonSerializer<List> toApiJsonSerializerForList;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
 
     @Override
@@ -86,7 +88,7 @@ public class InternalLoanInformationApiResource implements InitializingBean {
                 Map.of(CREATED_BY, loan.getCreatedBy().orElse(null), CREATED_DATE, loan.getCreatedDate().orElse(null), LAST_MODIFIED_BY,
                         loan.getLastModifiedBy().orElse(null), LAST_MODIFIED_DATE, loan.getLastModifiedDate().orElse(null)));
         final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        return this.toApiJsonSerializer.serialize(settings, auditFields);
+        return this.toApiJsonSerializerForMap.serialize(settings, auditFields);
     }
 
     @GET
@@ -106,6 +108,22 @@ public class InternalLoanInformationApiResource implements InitializingBean {
                 transaction.getCreatedDate().orElse(null), LAST_MODIFIED_BY, transaction.getLastModifiedBy().orElse(null),
                 LAST_MODIFIED_DATE, transaction.getLastModifiedDate().orElse(null)));
         final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
-        return this.toApiJsonSerializer.serialize(settings, auditFields);
+        return this.toApiJsonSerializerForMap.serialize(settings, auditFields);
+    }
+
+    @GET
+    @Path("status/{statusId}")
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    public String getLoansByStatus(@Context final UriInfo uriInfo, @PathParam("statusId") Integer statusId) {
+        log.warn("------------------------------------------------------------");
+        log.warn("                                                            ");
+        log.warn("Fetching loans by status {}", statusId);
+        log.warn("                                                            ");
+        log.warn("------------------------------------------------------------");
+
+        final List<Long> loanIds = loanRepositoryWrapper.findLoanIdsByStatusId(statusId);
+        final ApiRequestJsonSerializationSettings settings = this.apiRequestParameterHelper.process(uriInfo.getQueryParameters());
+        return this.toApiJsonSerializerForList.serialize(settings, loanIds);
     }
 }

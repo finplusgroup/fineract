@@ -19,17 +19,18 @@
 package org.apache.fineract.infrastructure.security.api;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.List;
 import java.util.Map;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
@@ -44,16 +45,14 @@ import org.apache.fineract.infrastructure.security.domain.TFAccessToken;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.TwoFactorService;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/twofactor")
+@Path("/v1/twofactor")
 @Component
 @ConditionalOnProperty("fineract.security.2fa.enabled")
-@Scope("singleton")
 @Tag(name = "Two Factor", description = "")
+@RequiredArgsConstructor
 public class TwoFactorApiResource {
 
     private final ToApiJsonSerializer<OTPMetadata> otpRequestSerializer;
@@ -64,20 +63,6 @@ public class TwoFactorApiResource {
     private final PlatformSecurityContext context;
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
     private final TwoFactorService twoFactorService;
-
-    @Autowired
-    public TwoFactorApiResource(ToApiJsonSerializer<OTPMetadata> otpRequestSerializer,
-            ToApiJsonSerializer<OTPDeliveryMethod> otpDeliveryMethodSerializer, ToApiJsonSerializer<AccessTokenData> accessTokenSerializer,
-            DefaultToApiJsonSerializer<Map<String, Object>> toApiJsonSerializer, PlatformSecurityContext context,
-            PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService, TwoFactorService twoFactorService) {
-        this.otpRequestSerializer = otpRequestSerializer;
-        this.otpDeliveryMethodSerializer = otpDeliveryMethodSerializer;
-        this.accessTokenSerializer = accessTokenSerializer;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.context = context;
-        this.commandsSourceWritePlatformService = commandsSourceWritePlatformService;
-        this.twoFactorService = twoFactorService;
-    }
 
     @GET
     @Produces({ MediaType.APPLICATION_JSON })

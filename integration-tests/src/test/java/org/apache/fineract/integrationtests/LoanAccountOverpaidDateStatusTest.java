@@ -30,8 +30,6 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
 import java.util.HashMap;
 import java.util.UUID;
 import org.apache.fineract.client.models.GetDelinquencyBucketsResponse;
@@ -46,20 +44,20 @@ import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
+import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.products.DelinquencyBucketsHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+@ExtendWith(LoanTestLifecycleExtension.class)
 public class LoanAccountOverpaidDateStatusTest {
 
     private ResponseSpecification responseSpec;
-    private ResponseSpecification responseSpecErr400;
-    private ResponseSpecification responseSpecErr503;
     private RequestSpecification requestSpec;
     private ClientHelper clientHelper;
     private LoanTransactionHelper loanTransactionHelper;
-    private DateTimeFormatter dateFormatter = new DateTimeFormatterBuilder().appendPattern("dd MMMM yyyy").toFormatter();
 
     @BeforeEach
     public void setup() {
@@ -67,8 +65,6 @@ public class LoanAccountOverpaidDateStatusTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.responseSpecErr400 = new ResponseSpecBuilder().expectStatusCode(400).build();
-        this.responseSpecErr503 = new ResponseSpecBuilder().expectStatusCode(503).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
         this.clientHelper = new ClientHelper(this.requestSpec, this.responseSpec);
     }
@@ -76,92 +72,95 @@ public class LoanAccountOverpaidDateStatusTest {
     @Test
     public void loanOverpaidDateStatusTest() {
         // Set business date
-        final LocalDate todaysDate = Utils.getLocalDateOfTenant();
-        GlobalConfigurationHelper.updateIsBusinessDateEnabled(requestSpec, responseSpec, Boolean.TRUE);
-        BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
+        try {
+            final LocalDate todaysDate = Utils.getLocalDateOfTenant();
 
-        // Loan ExternalId
-        String loanExternalIdStr = UUID.randomUUID().toString();
+            GlobalConfigurationHelper.updateIsBusinessDateEnabled(requestSpec, responseSpec, Boolean.TRUE);
+            BusinessDateHelper.updateBusinessDate(requestSpec, responseSpec, BusinessDateType.BUSINESS_DATE, todaysDate);
 
-        // Delinquency Bucket
-        final Integer delinquencyBucketId = DelinquencyBucketsHelper.createDelinquencyBucket(requestSpec, responseSpec);
-        final GetDelinquencyBucketsResponse delinquencyBucket = DelinquencyBucketsHelper.getDelinquencyBucket(requestSpec, responseSpec,
-                delinquencyBucketId);
+            // Loan ExternalId
+            String loanExternalIdStr = UUID.randomUUID().toString();
 
-        // Client and Loan account creation
+            // Delinquency Bucket
+            final Integer delinquencyBucketId = DelinquencyBucketsHelper.createDelinquencyBucket(requestSpec, responseSpec);
+            final GetDelinquencyBucketsResponse delinquencyBucket = DelinquencyBucketsHelper.getDelinquencyBucket(requestSpec, responseSpec,
+                    delinquencyBucketId);
 
-        final Integer clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId().intValue();
-        final GetLoanProductsProductIdResponse getLoanProductsProductResponse = createLoanProduct(loanTransactionHelper,
-                delinquencyBucketId);
-        assertNotNull(getLoanProductsProductResponse);
+            // Client and Loan account creation
 
-        final Integer loanId = createLoanAccount(clientId, getLoanProductsProductResponse.getId(), loanExternalIdStr);
+            final Integer clientId = clientHelper.createClient(ClientHelper.defaultClientCreationRequest()).getClientId().intValue();
+            final GetLoanProductsProductIdResponse getLoanProductsProductResponse = createLoanProduct(loanTransactionHelper,
+                    delinquencyBucketId);
+            assertNotNull(getLoanProductsProductResponse);
 
-        // make Repayments
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_1 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("5 September 2022").locale("en")
-                        .transactionAmount(200.0));
+            final Integer loanId = createLoanAccount(clientId, getLoanProductsProductResponse.getId(), loanExternalIdStr);
 
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_2 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("6 September 2022").locale("en")
-                        .transactionAmount(200.0));
+            // make Repayments
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_1 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("5 September 2022").locale("en")
+                            .transactionAmount(200.0));
 
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_3 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("7 September 2022").locale("en")
-                        .transactionAmount(500.0));
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_2 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("6 September 2022").locale("en")
+                            .transactionAmount(200.0));
 
-        // make repayment to make loan overpaid
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_4 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("9 September 2022").locale("en")
-                        .transactionAmount(200.0));
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_3 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("7 September 2022").locale("en")
+                            .transactionAmount(500.0));
 
-        // check loan overpaid date is not null and is set as Business date and loan status
-        GetLoansLoanIdResponse loanDetailsOverpaid = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertTrue(loanDetailsOverpaid.getStatus().getOverpaid());
-        assertNotNull(loanDetailsOverpaid.getOverpaidOnDate());
-        assertEquals(loanDetailsOverpaid.getOverpaidOnDate(), todaysDate);
+            // make repayment to make loan overpaid
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_4 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("9 September 2022").locale("en")
+                            .transactionAmount(200.0));
 
-        // reverse repayment to make loan not overpaid and overpaid date is reset
-        loanTransactionHelper.reverseRepayment(loanId, repaymentTransaction_4.getResourceId().intValue(), "10 September 2022");
-        GetLoansLoanIdResponse loanDetailsNotOverpaidAfterReversal = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertFalse(loanDetailsNotOverpaidAfterReversal.getStatus().getOverpaid());
-        assertNull(loanDetailsNotOverpaidAfterReversal.getOverpaidOnDate());
+            // check loan overpaid date is not null and is set as Business date and loan status
+            GetLoansLoanIdResponse loanDetailsOverpaid = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertTrue(loanDetailsOverpaid.getStatus().getOverpaid());
+            assertNotNull(loanDetailsOverpaid.getOverpaidOnDate());
+            assertEquals(loanDetailsOverpaid.getOverpaidOnDate(), LocalDate.of(2022, 9, 9));
 
-        // make repayment to make loan overpaid again
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_5 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("11 September 2022").locale("en")
-                        .transactionAmount(200.0));
+            // reverse repayment to make loan not overpaid and overpaid date is reset
+            loanTransactionHelper.reverseRepayment(loanId, repaymentTransaction_4.getResourceId().intValue(), "10 September 2022");
+            GetLoansLoanIdResponse loanDetailsNotOverpaidAfterReversal = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertFalse(loanDetailsNotOverpaidAfterReversal.getStatus().getOverpaid());
+            assertNull(loanDetailsNotOverpaidAfterReversal.getOverpaidOnDate());
 
-        // check loan overpaid date is not null and is set as Business date and loan status
-        GetLoansLoanIdResponse loanDetailsOverpaid_1 = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertTrue(loanDetailsOverpaid_1.getStatus().getOverpaid());
-        assertNotNull(loanDetailsOverpaid_1.getOverpaidOnDate());
-        assertEquals(loanDetailsOverpaid_1.getOverpaidOnDate(), todaysDate);
+            // make repayment to make loan overpaid again
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_5 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("11 September 2022").locale("en")
+                            .transactionAmount(200.0));
 
-        // Credit balance refund to reset overpaid status
-        loanTransactionHelper.creditBalanceRefund("12 September 2022", Float.valueOf(100), null, loanId, "");
-        GetLoansLoanIdResponse loanDetailsNotOverpaidAfterCBR = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertFalse(loanDetailsNotOverpaidAfterCBR.getStatus().getOverpaid());
-        assertNull(loanDetailsNotOverpaidAfterCBR.getOverpaidOnDate());
+            // check loan overpaid date is not null and is set as Business date and loan status
+            GetLoansLoanIdResponse loanDetailsOverpaid_1 = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertTrue(loanDetailsOverpaid_1.getStatus().getOverpaid());
+            assertNotNull(loanDetailsOverpaid_1.getOverpaidOnDate());
+            assertEquals(loanDetailsOverpaid_1.getOverpaidOnDate(), LocalDate.of(2022, 9, 11));
 
-        // reverse repayment to make loan active again
-        loanTransactionHelper.reverseRepayment(loanId, repaymentTransaction_2.getResourceId().intValue(), "13 September 2022");
-        GetLoansLoanIdResponse loanDetailsNotOverpaidAfterReversal_1 = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertFalse(loanDetailsNotOverpaidAfterReversal_1.getStatus().getOverpaid());
-        assertNull(loanDetailsNotOverpaidAfterReversal_1.getOverpaidOnDate());
+            // Credit balance refund to reset overpaid status
+            loanTransactionHelper.creditBalanceRefund("12 September 2022", Float.valueOf(100), null, loanId, "");
+            GetLoansLoanIdResponse loanDetailsNotOverpaidAfterCBR = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertFalse(loanDetailsNotOverpaidAfterCBR.getStatus().getOverpaid());
+            assertNull(loanDetailsNotOverpaidAfterCBR.getOverpaidOnDate());
 
-        // make repayment to make loan overpaid again
-        final PostLoansLoanIdTransactionsResponse repaymentTransaction_6 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
-                new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("14 September 2022").locale("en")
-                        .transactionAmount(300.0));
+            // reverse repayment to make loan active again
+            loanTransactionHelper.reverseRepayment(loanId, repaymentTransaction_2.getResourceId().intValue(), "13 September 2022");
+            GetLoansLoanIdResponse loanDetailsNotOverpaidAfterReversal_1 = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertFalse(loanDetailsNotOverpaidAfterReversal_1.getStatus().getOverpaid());
+            assertNull(loanDetailsNotOverpaidAfterReversal_1.getOverpaidOnDate());
 
-        // check loan overpaid date is not null and is set as Business date and loan status
-        GetLoansLoanIdResponse loanDetailsOverpaid_3 = loanTransactionHelper.getLoanDetails((long) loanId);
-        assertTrue(loanDetailsOverpaid_3.getStatus().getOverpaid());
-        assertNotNull(loanDetailsOverpaid_3.getOverpaidOnDate());
-        assertEquals(loanDetailsOverpaid_3.getOverpaidOnDate(), todaysDate);
+            // make repayment to make loan overpaid again
+            final PostLoansLoanIdTransactionsResponse repaymentTransaction_6 = loanTransactionHelper.makeLoanRepayment(loanExternalIdStr,
+                    new PostLoansLoanIdTransactionsRequest().dateFormat("dd MMMM yyyy").transactionDate("14 September 2022").locale("en")
+                            .transactionAmount(300.0));
 
-        GlobalConfigurationHelper.updateIsBusinessDateEnabled(requestSpec, responseSpec, Boolean.FALSE);
+            // check loan overpaid date is not null and is set as Business date and loan status
+            GetLoansLoanIdResponse loanDetailsOverpaid_3 = loanTransactionHelper.getLoanDetails((long) loanId);
+            assertTrue(loanDetailsOverpaid_3.getStatus().getOverpaid());
+            assertNotNull(loanDetailsOverpaid_3.getOverpaidOnDate());
+            assertEquals(loanDetailsOverpaid_3.getOverpaidOnDate(), LocalDate.of(2022, 9, 14));
+        } finally {
+            GlobalConfigurationHelper.updateIsBusinessDateEnabled(requestSpec, responseSpec, Boolean.FALSE);
+        }
 
     }
 

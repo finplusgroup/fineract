@@ -28,6 +28,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.restassured.RestAssured;
+import io.restassured.builder.RequestSpecBuilder;
+import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
@@ -57,6 +59,7 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.conn.HttpHostConnectException;
 import org.slf4j.Logger;
@@ -100,6 +103,16 @@ public final class Utils {
         RestAssured.useRelaxedHTTPSValidation();
     }
 
+    public static RequestSpecification initializeDefaultRequestSpecification() {
+        RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        return requestSpec;
+    }
+
+    public static ResponseSpecification initializeDefaultResponseSpecification() {
+        return new ResponseSpecBuilder().expectStatusCode(200).build();
+    }
+
     private static void awaitSpringBootActuatorHealthyUp() {
         int attempt = 0;
         final int max_attempts = 10;
@@ -130,6 +143,23 @@ public final class Utils {
             LOG.error("{} still has not returned HTTP 200, giving up (last) body: {}", HEALTH_URL, response.prettyPrint());
             fail(HEALTH_URL + " returned " + response.prettyPrint());
         }
+    }
+
+    /**
+     * Wait until the given condition is true or the maxRun is reached.
+     *
+     * @param maxRun
+     *            max number of times to run the condition
+     * @param seconds
+     *            wait time between evaluation in seconds
+     * @param waitCondition
+     *            condition to evaluate
+     */
+    public static void conditionalSleepWithMaxWait(int maxRun, int seconds, Supplier<Boolean> waitCondition) {
+        do {
+            sleep(seconds);
+            maxRun--;
+        } while (maxRun > 0 && waitCondition.get());
     }
 
     private static void sleep(int seconds) {

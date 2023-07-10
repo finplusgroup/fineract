@@ -28,18 +28,19 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.HashMap;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
@@ -56,14 +57,12 @@ import org.apache.fineract.portfolio.self.client.service.AppuserClientMapperRead
 import org.apache.fineract.portfolio.self.loanaccount.data.SelfLoansDataValidator;
 import org.apache.fineract.portfolio.self.loanaccount.service.AppuserLoansMapperReadService;
 import org.apache.fineract.useradministration.domain.AppUser;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/self/loans")
+@Path("/v1/self/loans")
 @Component
-@Scope("singleton")
 @Tag(name = "Self Loans", description = "")
+@RequiredArgsConstructor
 public class SelfLoansApiResource {
 
     private final PlatformSecurityContext context;
@@ -74,22 +73,6 @@ public class SelfLoansApiResource {
     private final AppuserClientMapperReadService appUserClientMapperReadService;
     private final SelfLoansDataValidator dataValidator;
     private final GuarantorsApiResource guarantorsApiResource;
-
-    @Autowired
-    public SelfLoansApiResource(final PlatformSecurityContext context, final LoansApiResource loansApiResource,
-            final LoanTransactionsApiResource loanTransactionsApiResource, final LoanChargesApiResource loanChargesApiResource,
-            final AppuserLoansMapperReadService appuserLoansMapperReadService,
-            final AppuserClientMapperReadService appUserClientMapperReadService, final SelfLoansDataValidator dataValidator,
-            final GuarantorsApiResource guarantorsApiResource) {
-        this.context = context;
-        this.loansApiResource = loansApiResource;
-        this.loanTransactionsApiResource = loanTransactionsApiResource;
-        this.loanChargesApiResource = loanChargesApiResource;
-        this.appuserLoansMapperReadService = appuserLoansMapperReadService;
-        this.appUserClientMapperReadService = appUserClientMapperReadService;
-        this.dataValidator = dataValidator;
-        this.guarantorsApiResource = guarantorsApiResource;
-    }
 
     @GET
     @Path("{loanId}")

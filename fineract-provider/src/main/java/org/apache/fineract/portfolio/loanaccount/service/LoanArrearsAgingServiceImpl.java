@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.portfolio.loanaccount.service;
 
+import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -27,7 +28,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
@@ -36,6 +36,7 @@ import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecific
 import org.apache.fineract.infrastructure.event.business.BusinessEventListener;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanAdjustTransactionBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanApplyOverdueChargeBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.LoanBalanceChangedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanDisbursalBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.charge.LoanAddChargeBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.charge.LoanWaiveChargeBusinessEvent;
@@ -92,6 +93,8 @@ public class LoanArrearsAgingServiceImpl implements LoanArrearsAgingService {
         businessEventNotifierService.addPostBusinessEventListener(LoanDisbursalBusinessEvent.class, new DisbursementEventListener());
         businessEventNotifierService.addPostBusinessEventListener(LoanForeClosurePostBusinessEvent.class,
                 new LoanForeClosureEventListener());
+        businessEventNotifierService.addPostBusinessEventListener(LoanBalanceChangedBusinessEvent.class,
+                new LoanBalanceChangedEventListener());
     }
 
     @Override
@@ -520,6 +523,15 @@ public class LoanArrearsAgingServiceImpl implements LoanArrearsAgingService {
         public void onBusinessEvent(LoanTransactionPayoutRefundPostBusinessEvent event) {
             LoanTransaction loanTransaction = event.get();
             Loan loan = loanTransaction.getLoan();
+            handleArrearsForLoan(loan);
+        }
+    }
+
+    private class LoanBalanceChangedEventListener implements BusinessEventListener<LoanBalanceChangedBusinessEvent> {
+
+        @Override
+        public void onBusinessEvent(LoanBalanceChangedBusinessEvent event) {
+            Loan loan = event.get();
             handleArrearsForLoan(loan);
         }
     }

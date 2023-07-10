@@ -25,11 +25,13 @@ import com.google.gson.Gson;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -39,6 +41,7 @@ import org.apache.fineract.cob.domain.LoanAccountLockRepository;
 import org.apache.fineract.cob.domain.LockOwner;
 import org.apache.fineract.cob.exceptions.LoanAccountLockCannotBeOverruledException;
 import org.apache.fineract.cob.loan.LoanCOBConstant;
+import org.apache.fineract.cob.loan.RetrieveLoanIdService;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
@@ -48,13 +51,12 @@ import org.apache.fineract.infrastructure.core.exception.PlatformInternalServerE
 import org.apache.fineract.infrastructure.core.exception.PlatformRequestBodyItemLimitValidationException;
 import org.apache.fineract.infrastructure.core.serialization.GoogleGsonSerializerHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
-import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameter;
+import org.apache.fineract.infrastructure.jobs.data.JobParameterDTO;
 import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameterRepository;
 import org.apache.fineract.infrastructure.jobs.exception.JobNotFoundException;
 import org.apache.fineract.infrastructure.jobs.service.InlineExecutorService;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.springbatch.SpringBatchJobConstants;
-import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.Job;
@@ -87,7 +89,7 @@ public class InlineLoanCOBExecutorServiceImpl implements InlineExecutorService<L
     private final TransactionTemplate transactionTemplate;
     private final CustomJobParameterRepository customJobParameterRepository;
     private final PlatformSecurityContext context;
-    private final LoanRepository loanRepository;
+    private final RetrieveLoanIdService retrieveLoanIdService;
     private final FineractProperties fineractProperties;
 
     private final Gson gson = GoogleGsonSerializerHelper.createSimpleGson();
@@ -129,7 +131,7 @@ public class InlineLoanCOBExecutorServiceImpl implements InlineExecutorService<L
     }
 
     private void execute(List<Long> loanIds, String jobName, LocalDate businessDate) {
-        lockLoanAccounts(loanIds);
+        lockLoanAccounts(loanIds, businessDate);
         Job inlineLoanCOBJob;
         try {
             inlineLoanCOBJob = jobLocator.getJob(jobName);
@@ -163,11 +165,11 @@ public class InlineLoanCOBExecutorServiceImpl implements InlineExecutorService<L
         List<LoanIdAndLastClosedBusinessDate> loanIdAndLastClosedBusinessDates = new ArrayList<>();
         List<List<Long>> partitions = Lists.partition(loanIds, fineractProperties.getQuery().getInClauseParameterSizeLimit());
         partitions.forEach(partition -> loanIdAndLastClosedBusinessDates
-                .addAll(loanRepository.findAllNonClosedLoansBehindOrNullByLoanIds(cobBusinessDate, partition)));
+                .addAll(retrieveLoanIdService.retrieveLoanIdsBehindDateOrNull(cobBusinessDate, partition)));
         return loanIdAndLastClosedBusinessDates;
     }
 
-    private List<LoanAccountLock> getLoanAccountLocks(List<Long> loanIds) {
+    private List<LoanAccountLock> getLoanAccountLocks(List<Long> loanIds, LocalDate businessDate) {
         List<LoanAccountLock> loanAccountLocks = new ArrayList<>();
         List<Long> alreadyLockedLoanIds = new ArrayList<>();
         loanIds.forEach(loanId -> {
@@ -180,7 +182,7 @@ public class InlineLoanCOBExecutorServiceImpl implements InlineExecutorService<L
                     alreadyLockedLoanIds.add(loanId);
                 }
             } else {
-                loanAccountLocks.add(new LoanAccountLock(loanId, LockOwner.LOAN_INLINE_COB_PROCESSING));
+                loanAccountLocks.add(new LoanAccountLock(loanId, LockOwner.LOAN_INLINE_COB_PROCESSING, businessDate));
             }
         });
         if (!alreadyLockedLoanIds.isEmpty()) {
@@ -192,38 +194,45 @@ public class InlineLoanCOBExecutorServiceImpl implements InlineExecutorService<L
         return loanAccountLocks;
     }
 
-    private Map<String, JobParameter> getJobParametersMap(List<Long> loanIds, LocalDate businessDate) {
+    private Map<String, JobParameter<?>> getJobParametersMap(List<Long> loanIds, LocalDate businessDate) {
         // TODO: refactor for a more generic solution
         String parameterJson = gson.toJson(loanIds);
-        CustomJobParameter loanIdsJobParameter = new CustomJobParameter();
-        loanIdsJobParameter.setParameterJson(parameterJson);
-        Long loanIdsJobParameterId = customJobParameterRepository.saveAndFlush(loanIdsJobParameter).getId();
-        CustomJobParameter businessDateJobParameter = new CustomJobParameter();
-        businessDateJobParameter.setParameterJson(gson.toJson(businessDate.format(DateTimeFormatter.ISO_DATE)));
-        Long businessDateJobParameterId = customJobParameterRepository.saveAndFlush(businessDateJobParameter).getId();
-        Map<String, JobParameter> jobParameterMap = new HashMap<>();
-        jobParameterMap.put(SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY, new JobParameter(loanIdsJobParameterId));
-        jobParameterMap.put(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME, new JobParameter(businessDateJobParameterId));
+        JobParameterDTO loanIdsParameterDTO = new JobParameterDTO(LoanCOBConstant.LOAN_IDS_PARAMETER_NAME, parameterJson);
+        Set<JobParameterDTO> loanIdJobParameter = Collections.singleton(loanIdsParameterDTO);
+        Long loanIdsJobParameterId = customJobParameterRepository.save(loanIdJobParameter);
+        JobParameterDTO businessDateParameterDTO = new JobParameterDTO(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME,
+                businessDate.format(DateTimeFormatter.ISO_DATE));
+        Set<JobParameterDTO> businessDateJobParameter = Collections.singleton(businessDateParameterDTO);
+        Long businessDateJobParameterId = customJobParameterRepository.save(businessDateJobParameter);
+        Map<String, JobParameter<?>> jobParameterMap = new HashMap<>();
+        jobParameterMap.put(SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY, new JobParameter<>(loanIdsJobParameterId, Long.class));
+        jobParameterMap.put(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME, new JobParameter<>(businessDateJobParameterId, Long.class));
         return jobParameterMap;
     }
 
-    private void lockLoanAccounts(List<Long> loanIds) {
+    private void lockLoanAccounts(List<Long> loanIds, LocalDate businessDate) {
         transactionTemplate.setPropagationBehavior(PROPAGATION_REQUIRES_NEW);
         transactionTemplate.execute(new TransactionCallbackWithoutResult() {
 
             @Override
             protected void doInTransactionWithoutResult(@NotNull TransactionStatus status) {
-                List<LoanAccountLock> loanAccountLocks = getLoanAccountLocks(loanIds);
+                List<LoanAccountLock> loanAccountLocks = getLoanAccountLocks(loanIds, businessDate);
                 loanAccountLocks.forEach(loanAccountLock -> {
-                    loanAccountLock.setNewLockOwner(LockOwner.LOAN_INLINE_COB_PROCESSING);
-                    loanAccountLockRepository.save(loanAccountLock);
+                    try {
+                        loanAccountLock.setNewLockOwner(LockOwner.LOAN_INLINE_COB_PROCESSING);
+                        loanAccountLockRepository.saveAndFlush(loanAccountLock);
+                    } catch (Exception e) {
+                        String message = "Error updating lock on loan account. Locked loan ID: %s".formatted(loanAccountLock.getLoanId());
+                        log.error("{}", message, e);
+                        throw new LoanAccountLockCannotBeOverruledException(message, e);
+                    }
                 });
             }
         });
     }
 
     private boolean isLockOverrulable(LoanAccountLock loanAccountLock) {
-        if (LockOwner.LOAN_COB_PARTITIONING.equals(loanAccountLock.getLockOwner()) || isBypassUser()) {
+        if (isBypassUser()) {
             return true;
         } else {
             return StringUtils.isNotBlank(loanAccountLock.getError());

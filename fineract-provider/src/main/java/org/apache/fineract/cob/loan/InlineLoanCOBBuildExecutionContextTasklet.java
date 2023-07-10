@@ -24,16 +24,20 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.cob.COBBusinessStepService;
+import org.apache.fineract.cob.common.CustomJobParameterResolver;
 import org.apache.fineract.cob.data.BusinessStepNameAndOrder;
+import org.apache.fineract.cob.exceptions.CustomJobParameterNotFoundException;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.serialization.GoogleGsonSerializerHelper;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
+import org.apache.fineract.infrastructure.jobs.data.JobParameterDTO;
 import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameter;
 import org.apache.fineract.infrastructure.jobs.domain.CustomJobParameterRepository;
 import org.apache.fineract.infrastructure.springbatch.SpringBatchJobConstants;
@@ -49,6 +53,7 @@ public class InlineLoanCOBBuildExecutionContextTasklet implements Tasklet {
 
     private final COBBusinessStepService cobBusinessStepService;
     private final CustomJobParameterRepository customJobParameterRepository;
+    private final CustomJobParameterResolver customJobParameterResolver;
 
     private final Gson gson = GoogleGsonSerializerHelper.createSimpleGson();
 
@@ -58,7 +63,8 @@ public class InlineLoanCOBBuildExecutionContextTasklet implements Tasklet {
         ThreadLocalContextUtil.setActionContext(ActionContext.COB);
         Set<BusinessStepNameAndOrder> cobBusinessSteps = cobBusinessStepService.getCOBBusinessSteps(LoanCOBBusinessStep.class,
                 LoanCOBConstant.LOAN_COB_JOB_NAME);
-        contribution.getStepExecution().getExecutionContext().put(LoanCOBConstant.LOAN_IDS, getLoanIdsFromJobParameters(chunkContext));
+        contribution.getStepExecution().getExecutionContext().put(LoanCOBConstant.LOAN_COB_PARAMETER,
+                getLoanIdsFromJobParameters(chunkContext));
         contribution.getStepExecution().getExecutionContext().put(LoanCOBConstant.BUSINESS_STEPS, cobBusinessSteps);
         String businessDateString = getBusinessDateFromJobParameters(chunkContext);
         contribution.getStepExecution().getExecutionContext().put(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME, businessDateString);
@@ -75,15 +81,20 @@ public class InlineLoanCOBBuildExecutionContextTasklet implements Tasklet {
         CustomJobParameter customJobParameter = customJobParameterRepository.findById(customJobParameterId)
                 .orElseThrow(() -> new LoanNotFoundException(customJobParameterId));
         String parameterJson = customJobParameter.getParameterJson();
-        return gson.fromJson(parameterJson, new TypeToken<String>() {}.getType());
+        Set<JobParameterDTO> jobParameters = gson.fromJson(parameterJson, new TypeToken<HashSet<JobParameterDTO>>() {}.getType());
+        JobParameterDTO businessDateParameter = jobParameters.stream()
+                .filter(jobParameterDTO -> jobParameterDTO.getParameterName().equals(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME))
+                .findFirst().orElseThrow(() -> new CustomJobParameterNotFoundException(LoanCOBConstant.BUSINESS_DATE_PARAMETER_NAME));
+        return businessDateParameter.getParameterValue();
     }
 
     private List<Long> getLoanIdsFromJobParameters(ChunkContext chunkContext) {
-        Long customJobParameterId = (Long) chunkContext.getStepContext().getJobParameters()
-                .get(SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY);
-        CustomJobParameter customJobParameter = customJobParameterRepository.findById(customJobParameterId)
-                .orElseThrow(() -> new LoanNotFoundException(customJobParameterId));
-        String parameterJson = customJobParameter.getParameterJson();
-        return gson.fromJson(parameterJson, new TypeToken<ArrayList<Long>>() {}.getType());
+        Set<JobParameterDTO> jobParameters = customJobParameterResolver
+                .getCustomJobParameterSet(chunkContext.getStepContext().getStepExecution())
+                .orElseThrow(() -> new LoanNotFoundException(SpringBatchJobConstants.CUSTOM_JOB_PARAMETER_ID_KEY));
+        JobParameterDTO loanIdsParameter = jobParameters.stream()
+                .filter(jobParameterDTO -> jobParameterDTO.getParameterName().equals(LoanCOBConstant.LOAN_IDS_PARAMETER_NAME)).findFirst()
+                .orElseThrow(() -> new CustomJobParameterNotFoundException(LoanCOBConstant.LOAN_IDS_PARAMETER_NAME));
+        return gson.fromJson(loanIdsParameter.getParameterValue(), new TypeToken<ArrayList<Long>>() {}.getType());
     }
 }

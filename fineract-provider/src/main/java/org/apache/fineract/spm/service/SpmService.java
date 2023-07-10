@@ -18,10 +18,10 @@
  */
 package org.apache.fineract.spm.service;
 
+import jakarta.persistence.EntityExistsException;
+import jakarta.persistence.PersistenceException;
 import java.time.LocalDate;
 import java.util.List;
-import javax.persistence.EntityExistsException;
-import javax.persistence.PersistenceException;
 import org.apache.fineract.infrastructure.core.exception.PlatformDataIntegrityException;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;

@@ -44,16 +44,19 @@ war {
         into "WEB-INF/" // no leading slash
     }
     enabled = true
-    classifier = ''
+    archiveClassifier = ''
 }
 
 dependencies {
+    implementation project(':fineract-core')
+    implementation project(':fineract-investor')
+    implementation project(':fineract-loan')
     implementation project(':fineract-provider')
 }
 
 tasks.withType(Tar) {
     compression Compression.GZIP
-    extension 'tar.gz'
+    archiveExtension = 'tar.gz'
 }
 
 distributions {

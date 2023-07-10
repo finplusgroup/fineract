@@ -33,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Objects;
 import lombok.AllArgsConstructor;
@@ -146,8 +147,9 @@ import org.springframework.util.CollectionUtils;
 @AllArgsConstructor
 @Service
 @Transactional(readOnly = true)
-public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
+public class LoanReadPlatformServiceImpl implements LoanReadPlatformService, LoanReadPlatformServiceCommon {
 
+    private static final String ACCRUAL_ON_CHARGE_SUBMITTED_ON_DATE = "submitted-date";
     private final JdbcTemplate jdbcTemplate;
     private final PlatformSecurityContext context;
     private final LoanRepositoryWrapper loanRepositoryWrapper;
@@ -617,6 +619,16 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
         } catch (final EmptyResultDataAccessException e) {
             throw new LoanTransactionNotFoundException(transactionId, e);
         }
+    }
+
+    @Override
+    public Long getLoanIdByLoanExternalId(String externalId) {
+        ExternalId loanExternalId = ExternalIdFactory.produce(externalId);
+        Long loanId = loanRepositoryWrapper.findIdByExternalId(loanExternalId);
+        if (Objects.isNull(loanId)) {
+            throw new LoanNotFoundException(loanExternalId);
+        }
+        return loanId;
     }
 
     private static final class LoanMapper implements RowMapper<LoanAccountData> {
@@ -1768,9 +1780,17 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
 
     @Override
     public Collection<LoanScheduleAccrualData> retriveScheduleAccrualData() {
+        final String chargeAccrualDateCriteria = configurationDomainService.getAccrualDateConfigForCharge();
+        if (chargeAccrualDateCriteria.equalsIgnoreCase(ACCRUAL_ON_CHARGE_SUBMITTED_ON_DATE)) {
+            return retrieveScheduleAccrualDataForChargeSubmittedDateProcessing();
+        }
+        return retrieveScheduleAccrualDataForDefaultProcessing();
+    }
 
-        LoanScheduleAccrualMapper mapper = new LoanScheduleAccrualMapper();
+    private Collection<LoanScheduleAccrualData> retrieveScheduleAccrualDataForDefaultProcessing() {
         LocalDate organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
+        LoanScheduleAccrualMapper mapper = new LoanScheduleAccrualMapper();
+        Map<String, Object> paramMap = new HashMap<>(3);
         final StringBuilder sqlBuilder = new StringBuilder(400);
         sqlBuilder.append("select ").append(mapper.schema()).append(
                 " where (recaldet.is_compounding_to_be_posted_as_transaction is null or recaldet.is_compounding_to_be_posted_as_transaction = false) ")
@@ -1778,16 +1798,40 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
                 .append(" or ( ls.penalty_charges_amount <> COALESCE(ls.accrual_penalty_charges_derived, 0))")
                 .append(" or ( ls.interest_amount <> COALESCE(ls.accrual_interest_derived, 0)))")
                 .append(" and loan.loan_status_id=:active and mpl.accounting_type=:type and loan.is_npa=false and ls.duedate <= :currentDate) ");
+
         if (organisationStartDate != null) {
             sqlBuilder.append(" and ls.duedate > :organisationStartDate ");
         }
         sqlBuilder.append(" order by loan.id,ls.duedate ");
-        Map<String, Object> paramMap = new HashMap<>(3);
+
         paramMap.put("active", LoanStatus.ACTIVE.getValue());
         paramMap.put("type", AccountingRuleType.ACCRUAL_PERIODIC.getValue());
         paramMap.put("organisationStartDate", (organisationStartDate == null) ? DateUtils.getBusinessLocalDate() : organisationStartDate);
         paramMap.put("currentDate", DateUtils.getBusinessLocalDate());
+        return this.namedParameterJdbcTemplate.query(sqlBuilder.toString(), paramMap, mapper);
 
+    }
+
+    private Collection<LoanScheduleAccrualData> retrieveScheduleAccrualDataForChargeSubmittedDateProcessing() {
+        LocalDate organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
+        LoanScheduleAccrualMapper mapper = new LoanScheduleAccrualMapper();
+        Map<String, Object> paramMap = new HashMap<>(3);
+        final StringBuilder sqlBuilder = new StringBuilder(400);
+        sqlBuilder.append("select ").append(mapper.schema()).append(
+                " where (recaldet.is_compounding_to_be_posted_as_transaction is null or recaldet.is_compounding_to_be_posted_as_transaction = false) ")
+                .append(" and (((ls.fee_charges_amount <> COALESCE(ls.accrual_fee_charges_derived, 0))")
+                .append(" or ( ls.penalty_charges_amount <> COALESCE(ls.accrual_penalty_charges_derived, 0))")
+                .append(" or ( ls.interest_amount <> COALESCE(ls.accrual_interest_derived, 0)))")
+                .append(" and loan.loan_status_id=:active and mpl.accounting_type=:type and loan.is_npa=false) ");
+
+        if (organisationStartDate != null) {
+            sqlBuilder.append(" and ls.duedate > :organisationStartDate ");
+        }
+        sqlBuilder.append(" order by loan.id,ls.duedate ");
+
+        paramMap.put("active", LoanStatus.ACTIVE.getValue());
+        paramMap.put("type", AccountingRuleType.ACCRUAL_PERIODIC.getValue());
+        paramMap.put("organisationStartDate", (organisationStartDate == null) ? DateUtils.getBusinessLocalDate() : organisationStartDate);
         return this.namedParameterJdbcTemplate.query(sqlBuilder.toString(), paramMap, mapper);
     }
 
@@ -1798,6 +1842,14 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
 
     @Override
     public Collection<LoanScheduleAccrualData> retrievePeriodicAccrualData(final LocalDate tillDate, final Loan loan) {
+        final String chargeAccrualDateCriteria = configurationDomainService.getAccrualDateConfigForCharge();
+        if (chargeAccrualDateCriteria.equalsIgnoreCase(ACCRUAL_ON_CHARGE_SUBMITTED_ON_DATE)) {
+            return retrievePeriodicAccrualDataForChargeSubmittedDateProcessing(tillDate, loan);
+        }
+        return retrievePeriodicAccrualDataForDefaultProcessing(tillDate, loan);
+    }
+
+    private Collection<LoanScheduleAccrualData> retrievePeriodicAccrualDataForDefaultProcessing(final LocalDate tillDate, final Loan loan) {
         LoanSchedulePeriodicAccrualMapper mapper = new LoanSchedulePeriodicAccrualMapper();
         LocalDate organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
         final StringBuilder sqlBuilder = new StringBuilder(400);
@@ -1822,7 +1874,34 @@ public class LoanReadPlatformServiceImpl implements LoanReadPlatformService {
         paramMap.put("active", LoanStatus.ACTIVE.getValue());
         paramMap.put("type", AccountingRuleType.ACCRUAL_PERIODIC.getValue());
         paramMap.put("tillDate", tillDate);
+        return this.namedParameterJdbcTemplate.query(sqlBuilder.toString(), paramMap, mapper);
+    }
 
+    private Collection<LoanScheduleAccrualData> retrievePeriodicAccrualDataForChargeSubmittedDateProcessing(final LocalDate tillDate,
+            final Loan loan) {
+        LoanSchedulePeriodicAccrualMapper mapper = new LoanSchedulePeriodicAccrualMapper();
+        LocalDate organisationStartDate = this.configurationDomainService.retrieveOrganisationStartDate();
+        final StringBuilder sqlBuilder = new StringBuilder(400);
+        sqlBuilder.append("select ").append(mapper.schema()).append(
+                " where (recaldet.is_compounding_to_be_posted_as_transaction is null or recaldet.is_compounding_to_be_posted_as_transaction = false) ")
+                .append(" and (((ls.fee_charges_amount <> COALESCE(ls.accrual_fee_charges_derived, 0))")
+                .append(" or (ls.penalty_charges_amount <> COALESCE(ls.accrual_penalty_charges_derived, 0))")
+                .append(" or (ls.interest_amount <> COALESCE(ls.accrual_interest_derived, 0)))")
+                .append(" and loan.loan_status_id=:active and mpl.accounting_type=:type and (loan.closedon_date <= :tillDate or loan.closedon_date is null)")
+                .append(" and loan.is_npa=false)");
+        Map<String, Object> paramMap = new HashMap<>(5);
+        if (organisationStartDate != null) {
+            sqlBuilder.append(" and ls.duedate > :organisationStartDate ");
+            paramMap.put("organisationStartDate", organisationStartDate);
+        }
+        if (loan != null) {
+            sqlBuilder.append(" and loan.id= :loanId ");
+            paramMap.put("loanId", loan.getId());
+        }
+        sqlBuilder.append(" order by loan.id,ls.duedate ");
+        paramMap.put("active", LoanStatus.ACTIVE.getValue());
+        paramMap.put("type", AccountingRuleType.ACCRUAL_PERIODIC.getValue());
+        paramMap.put("tillDate", tillDate);
         return this.namedParameterJdbcTemplate.query(sqlBuilder.toString(), paramMap, mapper);
     }
 

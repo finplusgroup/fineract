@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
+import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
@@ -85,6 +86,7 @@ public class LoanDelinquencyDomainServiceTest {
     @BeforeEach
     public void setUp() {
         ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", "Asia/Kolkata", null));
+        ThreadLocalContextUtil.setActionContext(ActionContext.DEFAULT);
         ThreadLocalContextUtil
                 .setBusinessDates(new HashMap<>(Map.of(BusinessDateType.BUSINESS_DATE, LocalDate.now(ZoneId.systemDefault()))));
 
@@ -110,8 +112,7 @@ public class LoanDelinquencyDomainServiceTest {
 
         // when
         when(loanProductRelatedDetail.getGraceOnArrearsAgeing()).thenReturn(0);
-        when(loanProduct.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
         when(loan.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loan.getCurrency()).thenReturn(currency);
 
@@ -135,8 +136,7 @@ public class LoanDelinquencyDomainServiceTest {
 
         // when
         when(loanProductRelatedDetail.getGraceOnArrearsAgeing()).thenReturn(0);
-        when(loanProduct.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
         when(loan.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loan.getLoanTransactions(Mockito.any(Predicate.class))).thenReturn(Collections.emptyList());
         when(loan.getLastLoanRepaymentScheduleInstallment()).thenReturn(repaymentScheduleInstallments.get(0));
@@ -172,8 +172,7 @@ public class LoanDelinquencyDomainServiceTest {
 
         // when
         when(loanProductRelatedDetail.getGraceOnArrearsAgeing()).thenReturn(0);
-        when(loanProduct.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
-        when(loan.getLoanProduct()).thenReturn(loanProduct);
+        when(loan.getLoanProductRelatedDetail()).thenReturn(loanProductRelatedDetail);
         when(loan.getRepaymentScheduleInstallments()).thenReturn(repaymentScheduleInstallments);
         when(loan.getCurrency()).thenReturn(currency);
 

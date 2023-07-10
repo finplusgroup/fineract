@@ -22,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import jakarta.ws.rs.HttpMethod;
 import java.util.stream.Stream;
-import javax.ws.rs.HttpMethod;
 import org.apache.fineract.batch.command.internal.ActivateClientCommandStrategy;
 import org.apache.fineract.batch.command.internal.AdjustChargeByChargeExternalIdCommandStrategy;
 import org.apache.fineract.batch.command.internal.AdjustChargeCommandStrategy;
@@ -45,6 +45,7 @@ import org.apache.fineract.batch.command.internal.CreateTransactionLoanCommandSt
 import org.apache.fineract.batch.command.internal.DisburseLoanCommandStrategy;
 import org.apache.fineract.batch.command.internal.GetChargeByChargeExternalIdCommandStrategy;
 import org.apache.fineract.batch.command.internal.GetChargeByIdCommandStrategy;
+import org.apache.fineract.batch.command.internal.GetDatatableEntryByAppTableIdAndDataTableIdCommandStrategy;
 import org.apache.fineract.batch.command.internal.GetDatatableEntryByAppTableIdCommandStrategy;
 import org.apache.fineract.batch.command.internal.GetDatatableEntryByQueryCommandStrategy;
 import org.apache.fineract.batch.command.internal.GetLoanByExternalIdCommandStrategy;
@@ -174,6 +175,9 @@ public class CommandStrategyProviderTest {
                         mock(GetDatatableEntryByAppTableIdCommandStrategy.class)),
                 Arguments.of("datatables/test_dt_table/123?genericResultSet=true", HttpMethod.GET,
                         "getDatatableEntryByAppTableIdCommandStrategy", mock(GetDatatableEntryByAppTableIdCommandStrategy.class)),
+                Arguments.of("datatables/test_dt_table/123/1?genericResultSet=true", HttpMethod.GET,
+                        "getDatatableEntryByAppTableIdAndDataTableIdCommandStrategy",
+                        mock(GetDatatableEntryByAppTableIdAndDataTableIdCommandStrategy.class)),
                 Arguments.of("datatables/test_dt_table/123", HttpMethod.POST, "createDatatableEntryCommandStrategy",
                         mock(CreateDatatableEntryCommandStrategy.class)),
                 Arguments.of("datatables/test_dt_table/123/1", HttpMethod.PUT, "updateDatatableEntryOneToManyCommandStrategy",
@@ -185,7 +189,9 @@ public class CommandStrategyProviderTest {
                 Arguments.of("loans/123", HttpMethod.PUT, "modifyLoanApplicationCommandStrategy",
                         mock(ModifyLoanApplicationCommandStrategy.class)),
                 Arguments.of("datatables/test_dt_table/query?columnFilter=id&valueFilter=12&resultColumns=id", HttpMethod.GET,
-                        "getDatatableEntryByQueryCommandStrategy", mock(GetDatatableEntryByQueryCommandStrategy.class)));
+                        "getDatatableEntryByQueryCommandStrategy", mock(GetDatatableEntryByQueryCommandStrategy.class)),
+                Arguments.of("datatables/test_dt_table/query?columnFilter=custom_id&valueFilter=10a62-d438-2319&resultColumns=id",
+                        HttpMethod.GET, "getDatatableEntryByQueryCommandStrategy", mock(GetDatatableEntryByQueryCommandStrategy.class)));
     }
 
     /**
@@ -202,12 +208,37 @@ public class CommandStrategyProviderTest {
      */
     @ParameterizedTest
     @MethodSource("provideCommandStrategies")
-    public void testGetCommandStrategySuccess(final String url, final String httpMethod, final String beanName,
+    public void testGetCommandStrategySuccess_OldUrls(final String url, final String httpMethod, final String beanName,
             final CommandStrategy commandStrategy) {
         final ApplicationContext applicationContext = mock(ApplicationContext.class);
         final CommandStrategyProvider commandStrategyProvider = new CommandStrategyProvider(applicationContext);
         when(applicationContext.getBean(beanName)).thenReturn(commandStrategy);
         final CommandStrategy result = commandStrategyProvider.getCommandStrategy(CommandContext.resource(url).method(httpMethod).build());
+        assertEquals(commandStrategy, result);
+    }
+
+    /**
+     * Tests {@link CommandStrategyProvider#getCommandStrategy} for success scenarios.
+     *
+     * @param url
+     *            the resource URL
+     * @param httpMethod
+     *            the resource HTTP method
+     * @param beanName
+     *            the context bean name
+     * @param commandStrategy
+     *            the command strategy
+     */
+    @ParameterizedTest
+    @MethodSource("provideCommandStrategies")
+    public void testGetCommandStrategySuccess_VersionedUrls(final String url, final String httpMethod, final String beanName,
+            final CommandStrategy commandStrategy) {
+        String versionedUrl = "v1/" + url;
+        final ApplicationContext applicationContext = mock(ApplicationContext.class);
+        final CommandStrategyProvider commandStrategyProvider = new CommandStrategyProvider(applicationContext);
+        when(applicationContext.getBean(beanName)).thenReturn(commandStrategy);
+        final CommandStrategy result = commandStrategyProvider
+                .getCommandStrategy(CommandContext.resource(versionedUrl).method(httpMethod).build());
         assertEquals(commandStrategy, result);
     }
 

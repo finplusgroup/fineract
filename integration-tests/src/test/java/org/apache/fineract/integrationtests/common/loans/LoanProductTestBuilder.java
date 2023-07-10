@@ -42,6 +42,9 @@ public class LoanProductTestBuilder {
     private static final String FLAT_BALANCE = "1";
     public static final String DEFAULT_STRATEGY = "mifos-standard-strategy";
     public static final String INTEREST_PRINCIPAL_PENALTIES_FEES_ORDER_STRATEGY = "interest-principal-penalties-fees-order-strategy";
+    public static final String DUE_PENALTY_FEE_INTEREST_PRINCIPAL_IN_ADVANCE_PRINCIPAL_PENALTY_FEE_INTEREST_STRATEGY = "due-penalty-fee-interest-principal-in-advance-principal-penalty-fee-interest-strategy";
+    public static final String DUE_PENALTY_INTEREST_PRINCIPAL_FEE_IN_ADVANCE_PENALTY_INTEREST_PRINCIPAL_FEE_STRATEGY = "due-penalty-interest-principal-fee-in-advance-penalty-interest-principal-fee-strategy";
+
     // private static final String HEAVENS_FAMILY_STRATEGY ="heavensfamily-strategy";
     // private static final String CREO_CORE_STRATEGY ="creocore-strategy";
     public static final String RBI_INDIA_STRATEGY = "rbi-india-strategy";
@@ -72,7 +75,7 @@ public class LoanProductTestBuilder {
     private String inMultiplesOf = "0";
 
     private String nameOfLoanProduct = Utils.uniqueRandomStringGenerator("LOAN_PRODUCT_", 6);
-    private final String shortName = Utils.uniqueRandomStringGenerator("", 4);
+    private String shortName = Utils.uniqueRandomStringGenerator("", 4);
     private String principal = "10000.00";
     private String numberOfRepayments = "5";
     private String repaymentFrequency = MONTHS;
@@ -137,6 +140,8 @@ public class LoanProductTestBuilder {
     private String installmentAmountInMultiplesOf;
     private boolean canDefineInstallmentAmount;
     private Integer delinquencyBucketId;
+    private Integer dueDaysForRepaymentEvent = null;
+    private Integer overDueDaysForRepaymentEvent = null;
 
     public String build(final String chargeId) {
         final HashMap<String, Object> map = build(chargeId, null);
@@ -266,6 +271,13 @@ public class LoanProductTestBuilder {
             map.put("penaltyToIncomeAccountMappings", this.penaltyToIncomeAccountMappings);
         }
 
+        if (this.dueDaysForRepaymentEvent != null) {
+            map.put("dueDaysForRepaymentEvent", this.dueDaysForRepaymentEvent);
+        }
+        if (this.overDueDaysForRepaymentEvent != null) {
+            map.put("overDueDaysForRepaymentEvent", this.overDueDaysForRepaymentEvent);
+        }
+
         return map;
     }
 
@@ -296,6 +308,11 @@ public class LoanProductTestBuilder {
 
     public LoanProductTestBuilder withPrincipal(final String principal) {
         this.principal = principal;
+        return this;
+    }
+
+    public LoanProductTestBuilder withShortName(final String shortName) {
+        this.shortName = shortName;
         return this;
     }
 
@@ -375,8 +392,8 @@ public class LoanProductTestBuilder {
         return this;
     }
 
-    public LoanProductTestBuilder withInArrearsTolerance(final String amountCanBeWaved) {
-        this.inArrearsTolerance = amountCanBeWaved;
+    public LoanProductTestBuilder withInArrearsTolerance(final String inArrearsTolerance) {
+        this.inArrearsTolerance = inArrearsTolerance;
         return this;
     }
 
@@ -418,8 +435,8 @@ public class LoanProductTestBuilder {
         return this;
     }
 
-    public LoanProductTestBuilder withDisallowExpectedDisbursements(boolean disallowExpectectedDisbursements) {
-        this.disallowExpectedDisbursements = disallowExpectectedDisbursements;
+    public LoanProductTestBuilder withDisallowExpectedDisbursements(boolean disallowExpectedDisbursements) {
+        this.disallowExpectedDisbursements = disallowExpectedDisbursements;
         if (this.disallowExpectedDisbursements) {
             this.allowApprovedDisbursedAmountsOverApplied = true;
             this.overAppliedCalculationType = "percentage";
@@ -655,4 +672,15 @@ public class LoanProductTestBuilder {
         this.feeAndPenaltyAssetAccount = account;
         return this;
     }
+
+    public LoanProductTestBuilder withDueDaysForRepaymentEvent(final Integer dueDaysForRepaymentEvent) {
+        this.dueDaysForRepaymentEvent = dueDaysForRepaymentEvent;
+        return this;
+    }
+
+    public LoanProductTestBuilder withOverDueDaysForRepaymentEvent(final Integer overDueDaysForRepaymentEvent) {
+        this.overDueDaysForRepaymentEvent = overDueDaysForRepaymentEvent;
+        return this;
+    }
+
 }

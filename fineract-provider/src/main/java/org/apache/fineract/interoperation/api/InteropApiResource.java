@@ -29,22 +29,23 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.PortfolioCommandSourceWritePlatformService;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
@@ -70,34 +71,19 @@ import org.apache.fineract.interoperation.data.InteropTransferResponseData;
 import org.apache.fineract.interoperation.domain.InteropIdentifierType;
 import org.apache.fineract.interoperation.domain.InteropTransferActionType;
 import org.apache.fineract.interoperation.service.InteropService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/interoperation") // api/v1/
+@Path("/v1/interoperation") // api/v1/
 @Component
-@Scope("singleton")
 @Tag(name = "Inter Operation", description = "")
+@RequiredArgsConstructor
 public class InteropApiResource {
 
-    private PlatformSecurityContext context;
-    private ApiRequestParameterHelper apiRequestParameterHelper;
-
-    private DefaultToApiJsonSerializer<CommandProcessingResult> jsonSerializer;
-
-    private InteropService interopService;
-    private PortfolioCommandSourceWritePlatformService commandsSourceService;
-
-    @Autowired
-    public InteropApiResource(PlatformSecurityContext context, ApiRequestParameterHelper apiRequestParameterHelper,
-            DefaultToApiJsonSerializer<CommandProcessingResult> defaultToApiJsonSerializer, InteropService interopService,
-            PortfolioCommandSourceWritePlatformService portfolioCommandSourceWritePlatformService) {
-        this.context = context;
-        this.apiRequestParameterHelper = apiRequestParameterHelper;
-        this.jsonSerializer = defaultToApiJsonSerializer;
-        this.interopService = interopService;
-        this.commandsSourceService = portfolioCommandSourceWritePlatformService;
-    }
+    private final PlatformSecurityContext context;
+    private final ApiRequestParameterHelper apiRequestParameterHelper;
+    private final DefaultToApiJsonSerializer<CommandProcessingResult> jsonSerializer;
+    private final InteropService interopService;
+    private final PortfolioCommandSourceWritePlatformService commandsSourceService;
 
     @GET
     @Consumes({ MediaType.APPLICATION_JSON })
@@ -414,6 +400,16 @@ public class InteropApiResource {
     public String disburseLoan(@PathParam("accountId") @Parameter(description = "accountId") String accountId,
             @Parameter(hidden = true) final String apiRequestBodyAsJson, @Context UriInfo uriInfo) {
         return interopService.disburseLoan(accountId, apiRequestBodyAsJson);
+    }
+
+    @POST
+    @Consumes({ MediaType.APPLICATION_JSON })
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Path("transactions/{accountId}/loanrepayment")
+    @Operation(summary = "Disburse Loan by Account Id", description = "")
+    public String loanRepayment(@PathParam("accountId") @Parameter(description = "accountId") String accountId,
+            @Parameter(hidden = true) final String apiRequestBodyAsJson, @Context UriInfo uriInfo) {
+        return interopService.loanRepayment(accountId, apiRequestBodyAsJson);
     }
 
 }

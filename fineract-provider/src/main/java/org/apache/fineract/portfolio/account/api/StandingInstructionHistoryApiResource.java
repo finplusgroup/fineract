@@ -25,15 +25,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.time.LocalDate;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.accounting.journalentry.api.DateParam;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
@@ -44,31 +45,18 @@ import org.apache.fineract.infrastructure.security.service.PlatformSecurityConte
 import org.apache.fineract.portfolio.account.data.StandingInstructionDTO;
 import org.apache.fineract.portfolio.account.data.StandingInstructionHistoryData;
 import org.apache.fineract.portfolio.account.service.StandingInstructionHistoryReadPlatformService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/standinginstructionrunhistory")
+@Path("/v1/standinginstructionrunhistory")
 @Component
-@Scope("singleton")
 @Tag(name = "Standing Instructions History", description = "The list capability of history can support pagination and sorting.")
+@RequiredArgsConstructor
 public class StandingInstructionHistoryApiResource {
 
     private final PlatformSecurityContext context;
     private final DefaultToApiJsonSerializer<StandingInstructionHistoryData> toApiJsonSerializer;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final StandingInstructionHistoryReadPlatformService standingInstructionHistoryReadPlatformService;
-
-    @Autowired
-    public StandingInstructionHistoryApiResource(final PlatformSecurityContext context,
-            final ApiRequestParameterHelper apiRequestParameterHelper,
-            final StandingInstructionHistoryReadPlatformService standingInstructionHistoryReadPlatformService,
-            final DefaultToApiJsonSerializer<StandingInstructionHistoryData> toApiJsonSerializer) {
-        this.context = context;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.apiRequestParameterHelper = apiRequestParameterHelper;
-        this.standingInstructionHistoryReadPlatformService = standingInstructionHistoryReadPlatformService;
-    }
 
     @GET
     @Consumes({ MediaType.APPLICATION_JSON })

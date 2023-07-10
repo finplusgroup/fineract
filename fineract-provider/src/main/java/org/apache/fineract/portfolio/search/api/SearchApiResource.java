@@ -27,18 +27,19 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 import java.util.Collection;
 import java.util.Set;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.api.ApiRequestParameterHelper;
 import org.apache.fineract.infrastructure.core.serialization.ApiRequestJsonSerializationSettings;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
@@ -49,14 +50,12 @@ import org.apache.fineract.portfolio.search.data.AdHocSearchQueryData;
 import org.apache.fineract.portfolio.search.data.SearchConditions;
 import org.apache.fineract.portfolio.search.data.SearchData;
 import org.apache.fineract.portfolio.search.service.SearchReadPlatformService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/search")
+@Path("/v1/search")
 @Component
-@Scope("singleton")
 @Tag(name = "Search API", description = "Search API allows to search scoped resources clients, loans and groups on specified fields.")
+@RequiredArgsConstructor
 public class SearchApiResource {
 
     private static final Set<String> SEARCH_RESPONSE_PARAMETERS = SearchResponseParameters.getAllValues();
@@ -65,18 +64,6 @@ public class SearchApiResource {
     private final ToApiJsonSerializer<Object> toApiJsonSerializer;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final AdHocQueryDataValidator fromApiJsonDeserializer;
-
-    @Autowired
-    public SearchApiResource(final SearchReadPlatformService searchReadPlatformService,
-            final ToApiJsonSerializer<Object> toApiJsonSerializer, final ApiRequestParameterHelper apiRequestParameterHelper,
-            final AdHocQueryDataValidator fromApiJsonDeserializer) {
-
-        this.searchReadPlatformService = searchReadPlatformService;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.apiRequestParameterHelper = apiRequestParameterHelper;
-        this.fromApiJsonDeserializer = fromApiJsonDeserializer;
-
-    }
 
     @GET
     @Path("/template")

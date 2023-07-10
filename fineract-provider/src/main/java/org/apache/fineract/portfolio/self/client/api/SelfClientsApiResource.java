@@ -26,21 +26,22 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 import java.io.InputStream;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.HeaderParam;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.data.UploadRequest;
 import org.apache.fineract.infrastructure.documentmanagement.api.ImagesApiResource;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
@@ -55,15 +56,12 @@ import org.apache.fineract.useradministration.domain.AppUser;
 import org.glassfish.jersey.media.multipart.FormDataBodyPart;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/self/clients")
+@Path("/v1/self/clients")
 @Component
-@Scope("singleton")
-
 @Tag(name = "Self Client", description = "")
+@RequiredArgsConstructor
 public class SelfClientsApiResource {
 
     private final PlatformSecurityContext context;
@@ -73,20 +71,6 @@ public class SelfClientsApiResource {
     private final ClientTransactionsApiResource clientTransactionsApiResource;
     private final AppuserClientMapperReadService appUserClientMapperReadService;
     private final SelfClientDataValidator dataValidator;
-
-    @Autowired
-    public SelfClientsApiResource(final PlatformSecurityContext context, final ClientsApiResource clientApiResource,
-            final ImagesApiResource imagesApiResource, final ClientChargesApiResource clientChargesApiResource,
-            final ClientTransactionsApiResource clientTransactionsApiResource,
-            final AppuserClientMapperReadService appUserClientMapperReadService, final SelfClientDataValidator dataValidator) {
-        this.context = context;
-        this.clientApiResource = clientApiResource;
-        this.imagesApiResource = imagesApiResource;
-        this.clientChargesApiResource = clientChargesApiResource;
-        this.clientTransactionsApiResource = clientTransactionsApiResource;
-        this.appUserClientMapperReadService = appUserClientMapperReadService;
-        this.dataValidator = dataValidator;
-    }
 
     @GET
     @Consumes({ MediaType.APPLICATION_JSON })

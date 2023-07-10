@@ -21,22 +21,23 @@ package org.apache.fineract.infrastructure.event.external.producer.jms;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import jakarta.jms.BytesMessage;
+import jakarta.jms.Connection;
+import jakarta.jms.ConnectionFactory;
+import jakarta.jms.Destination;
+import jakarta.jms.MessageProducer;
+import jakarta.jms.Session;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import javax.jms.BytesMessage;
-import javax.jms.Connection;
-import javax.jms.ConnectionFactory;
-import javax.jms.Destination;
-import javax.jms.MessageProducer;
-import javax.jms.Session;
 import org.apache.fineract.avro.MessageV1;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.messaging.jms.MessageFactory;
 import org.apache.fineract.infrastructure.core.service.HashingService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -107,6 +108,13 @@ class JMSMultiExternalEventProducerTest {
         given(session1.createProducer(destination)).willReturn(producer1);
         given(session2.createProducer(destination)).willReturn(producer2);
         given(session3.createProducer(destination)).willReturn(producer3);
+    }
+
+    @AfterEach
+    public void tearDown() throws Exception {
+        verify(session1).close();
+        verify(session2).close();
+        verify(session3).close();
     }
 
     @Test

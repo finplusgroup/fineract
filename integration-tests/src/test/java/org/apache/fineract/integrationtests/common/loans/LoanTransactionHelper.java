@@ -27,6 +27,8 @@ import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -39,8 +41,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.DeleteLoansLoanIdChargesChargeIdResponse;
 import org.apache.fineract.client.models.DeleteLoansLoanIdResponse;
@@ -70,6 +70,8 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsTransactionIdRequest;
 import org.apache.fineract.client.models.PutChargeTransactionChangesRequest;
 import org.apache.fineract.client.models.PutChargeTransactionChangesResponse;
+import org.apache.fineract.client.models.PutLoanProductsProductIdRequest;
+import org.apache.fineract.client.models.PutLoanProductsProductIdResponse;
 import org.apache.fineract.client.models.PutLoansLoanIdChargesChargeIdRequest;
 import org.apache.fineract.client.models.PutLoansLoanIdChargesChargeIdResponse;
 import org.apache.fineract.client.models.PutLoansLoanIdRequest;
@@ -349,9 +351,15 @@ public class LoanTransactionHelper extends IntegrationTest {
                 getDisburseLoanAsJSON(date, null, netDisbursalAmount));
     }
 
-    public HashMap disburseLoan(final String date, final Integer loanID, final String netDisbursalAmount, final String externalId) {
+    public HashMap disburseLoan(final String date, final Integer loanID, final String transactionAmount, final String externalId) {
         return (HashMap) performLoanTransaction(createLoanOperationURL(DISBURSE_LOAN_COMMAND, loanID),
-                getDisburseLoanAsJSON(date, null, netDisbursalAmount, externalId), "");
+                getDisburseLoanAsJSON(date, transactionAmount, null, externalId), "");
+    }
+
+    public Object disburseLoanWithTransactionAmount(final String date, final Integer loanID, final String transactionAmount,
+            ResponseSpecification responseSpec) {
+        return performLoanTransaction(createLoanOperationURL(DISBURSE_LOAN_COMMAND, loanID),
+                getDisburseLoanAsJSON(date, transactionAmount, null), responseSpec);
     }
 
     public HashMap disburseLoanWithTransactionAmount(final String date, final Integer loanID, final String transactionAmount) {
@@ -502,6 +510,11 @@ public class LoanTransactionHelper extends IntegrationTest {
 
     public HashMap makeRepayment(final String date, final Float amountToBePaid, final Integer loanID) {
         return (HashMap) performLoanTransaction(createLoanTransactionURL(MAKE_REPAYMENT_COMMAND, loanID),
+                getRepaymentBodyAsJSON(date, amountToBePaid), "");
+    }
+
+    public HashMap makeRepaymentWithAccountNo(final String date, final Float amountToBePaid, final String accountNo) {
+        return (HashMap) performLoanTransaction(createInteroperationLoanTransactionURL(accountNo),
                 getRepaymentBodyAsJSON(date, amountToBePaid), "");
     }
 
@@ -1283,6 +1296,10 @@ public class LoanTransactionHelper extends IntegrationTest {
         return "/fineract-provider/api/v1/loans/" + loanID + "/transactions?command=" + command + "&" + Utils.TENANT_IDENTIFIER;
     }
 
+    private String createInteroperationLoanTransactionURL(final String accountNo) {
+        return "/fineract-provider/api/v1/interoperation/transactions/" + accountNo + "/loanrepayment";
+    }
+
     private String createLoanTransactionURL(final String command, final Integer loanID, final Integer transactionId) {
         String url = "/fineract-provider/api/v1/loans/" + loanID + "/transactions/" + transactionId + "?";
         if (command != null) {
@@ -1741,6 +1758,10 @@ public class LoanTransactionHelper extends IntegrationTest {
         return ok(fineract().loans.stateTransitions1(loanExternalId, request, "reject"));
     }
 
+    public PostLoansLoanIdResponse rejectLoan(Long loanId, PostLoansLoanIdRequest request) {
+        return ok(fineract().loans.stateTransitions(loanId, request, "reject"));
+    }
+
     public PostLoansLoanIdResponse withdrawnByApplicantLoan(String loanExternalId, PostLoansLoanIdRequest request) {
         return ok(fineract().loans.stateTransitions1(loanExternalId, request, "withdrawnByApplicant"));
     }
@@ -1831,5 +1852,17 @@ public class LoanTransactionHelper extends IntegrationTest {
 
     public PostLoansLoanIdTransactionsResponse undoChargeOffLoan(Long loanId, PostLoansLoanIdTransactionsRequest request) {
         return ok(fineract().loanTransactions.executeLoanTransaction(loanId, request, "undo-charge-off"));
+    }
+
+    public static List<Integer> getLoanIdsByStatusId(RequestSpecification requestSpec, ResponseSpecification responseSpec,
+            Integer statusId) {
+        final String GET_LOAN_URL = "/fineract-provider/api/v1/internal/loan/status/" + statusId + "?" + Utils.TENANT_IDENTIFIER;
+        log.info("---------------------------------GET LOANS BY STATUS---------------------------------------------");
+        final String get = Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_URL, null);
+        return new Gson().fromJson(get, new TypeToken<ArrayList<Integer>>() {}.getType());
+    }
+
+    public PutLoanProductsProductIdResponse updateLoanProduct(Long id, PutLoanProductsProductIdRequest requestModifyLoan) {
+        return ok(fineract().loanProducts.updateLoanProduct(id, requestModifyLoan));
     }
 }

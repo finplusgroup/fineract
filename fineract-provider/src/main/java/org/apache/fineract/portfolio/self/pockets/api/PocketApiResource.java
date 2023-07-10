@@ -26,15 +26,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
 import org.apache.fineract.commands.service.CommandWrapperBuilder;
@@ -43,31 +44,18 @@ import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.exception.UnrecognizedQueryParamException;
 import org.apache.fineract.infrastructure.core.serialization.DefaultToApiJsonSerializer;
 import org.apache.fineract.portfolio.self.pockets.service.PocketAccountMappingReadPlatformService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
 
-@Path("/self/pockets")
+@Path("/v1/self/pockets")
 @Component
-@Scope("singleton")
-
 @Tag(name = "Pocket", description = "")
+@RequiredArgsConstructor
 public class PocketApiResource {
 
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
     @SuppressWarnings("rawtypes")
     private final DefaultToApiJsonSerializer toApiJsonSerializer;
     private final PocketAccountMappingReadPlatformService pocketAccountMappingReadPlatformService;
-
-    @SuppressWarnings("rawtypes")
-    @Autowired
-    public PocketApiResource(PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService,
-            final DefaultToApiJsonSerializer toApiJsonSerializer,
-            final PocketAccountMappingReadPlatformService pocketAccountMappingReadPlatformService) {
-        this.commandsSourceWritePlatformService = commandsSourceWritePlatformService;
-        this.toApiJsonSerializer = toApiJsonSerializer;
-        this.pocketAccountMappingReadPlatformService = pocketAccountMappingReadPlatformService;
-    }
 
     @POST
     @Consumes({ MediaType.APPLICATION_JSON })

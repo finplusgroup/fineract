@@ -42,6 +42,7 @@ import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.ExternalIdFactory;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanBalanceChangedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.LoanBusinessEvent;
+import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanAccrualTransactionCreatedBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanChargePaymentPostBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanChargePaymentPreBusinessEvent;
 import org.apache.fineract.infrastructure.event.business.domain.loan.transaction.LoanCreditBalanceRefundPostBusinessEvent;
@@ -90,6 +91,7 @@ import org.apache.fineract.portfolio.loanaccount.data.LoanScheduleAccrualData;
 import org.apache.fineract.portfolio.loanaccount.data.LoanScheduleDelinquencyData;
 import org.apache.fineract.portfolio.loanaccount.data.ScheduleGeneratorDTO;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAccrualPlatformService;
+import org.apache.fineract.portfolio.loanaccount.service.LoanAccrualTransactionBusinessEventService;
 import org.apache.fineract.portfolio.loanaccount.service.LoanAssembler;
 import org.apache.fineract.portfolio.loanaccount.service.LoanUtilService;
 import org.apache.fineract.portfolio.loanaccount.service.ReplayedTransactionBusinessEventService;
@@ -130,6 +132,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     private final LoanLifecycleStateMachine defaultLoanLifecycleStateMachine;
     private final ExternalIdFactory externalIdFactory;
     private final ReplayedTransactionBusinessEventService replayedTransactionBusinessEventService;
+    private final LoanAccrualTransactionBusinessEventService loanAccrualTransactionBusinessEventService;
 
     @Transactional
     @Override
@@ -163,12 +166,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             final boolean isRecoveryRepayment, final String chargeRefundChargeType, boolean isAccountTransfer,
             HolidayDetailDTO holidayDetailDto, Boolean isHolidayValidationDone, final boolean isLoanToLoanTransfer) {
         checkClientOrGroupActive(loan);
-        if (loan.isChargedOff() && transactionDate.isBefore(loan.getChargedOffOnDate())) {
-            throw new GeneralPlatformDomainRuleException("error.msg.transaction.date.cannot.be.earlier.than.charge.off.date", "Loan: "
-                    + loan.getId()
-                    + " backdated transaction is not allowed. Transaction date cannot be earlier than the charge-off date of the loan",
-                    loan.getId());
-        }
+
         LoanBusinessEvent repaymentEvent = getLoanRepaymentTypeBusinessEvent(repaymentTransactionType, isRecoveryRepayment, loan);
         businessEventNotifierService.notifyPreBusinessEvent(repaymentEvent);
 
@@ -213,7 +211,8 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
          * before the latest payment recorded against the loan)
          ***/
         if (changedTransactionDetail != null) {
-            for (Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
+            for (final Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
+                saveLoanTransactionWithDataIntegrityViolationChecks(mapEntry.getValue());
                 updateLoanTransaction(mapEntry.getKey(), mapEntry.getValue());
             }
             // Trigger transaction replayed event
@@ -227,7 +226,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         }
 
         postJournalEntries(loan, existingTransactionIds, existingReversedTransactionIds, isAccountTransfer, isLoanToLoanTransfer);
-
+        loanAccrualTransactionBusinessEventService.raiseBusinessEventForAccrualTransactions(loan, existingTransactionIds);
         recalculateAccruals(loan);
 
         setLoanDelinquencyTag(loan, transactionDate);
@@ -405,6 +404,8 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         }
 
         postJournalEntries(loan, existingTransactionIds, existingReversedTransactionIds, isAccountTransfer);
+        loanAccrualTransactionBusinessEventService.raiseBusinessEventForAccrualTransactions(loan, existingTransactionIds);
+
         recalculateAccruals(loan);
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanChargePaymentPostBusinessEvent(newPaymentTransaction));
@@ -421,10 +422,19 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
 
         final MonetaryCurrency currency = loanAccount.getCurrency();
 
-        final Map<String, Object> accountingBridgeData = loanAccount.deriveAccountingBridgeData(currency.getCode(), existingTransactionIds,
-                existingReversedTransactionIds, isAccountTransfer);
-        accountingBridgeData.put("isLoanToLoanTransfer", isLoanToLoanTransfer);
-        this.journalEntryWritePlatformService.createJournalEntriesForLoan(accountingBridgeData);
+        List<Map<String, Object>> accountingBridgeData = new ArrayList<>();
+        if (loanAccount.isChargedOff()) {
+            accountingBridgeData = loanAccount.deriveAccountingBridgeDataForChargeOff(currency.getCode(), existingTransactionIds,
+                    existingReversedTransactionIds, isAccountTransfer);
+        } else {
+            accountingBridgeData.add(loanAccount.deriveAccountingBridgeData(currency.getCode(), existingTransactionIds,
+                    existingReversedTransactionIds, isAccountTransfer));
+        }
+        for (Map<String, Object> accountingData : accountingBridgeData) {
+            accountingData.put("isLoanToLoanTransfer", isLoanToLoanTransfer);
+            this.journalEntryWritePlatformService.createJournalEntriesForLoan(accountingData);
+        }
+
     }
 
     private void checkClientOrGroupActive(final Loan loan) {
@@ -480,6 +490,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         }
 
         postJournalEntries(loan, existingTransactionIds, existingReversedTransactionIds, isAccountTransfer);
+        loanAccrualTransactionBusinessEventService.raiseBusinessEventForAccrualTransactions(loan, existingTransactionIds);
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanRefundPostBusinessEvent(newRefundTransaction));
         builderResult.withEntityId(newRefundTransaction.getId()).withOfficeId(loan.getOfficeId()).withClientId(loan.getClientId())
@@ -634,7 +645,10 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             }
 
             for (final LoanCharge loanCharge : loanCharges) {
-                if (loanCharge.isDueForCollectionFromAndUpToAndIncluding(installment.getFromDate(), chargesTillDate)) {
+                boolean isDue = installment.isFirstPeriod()
+                        ? loanCharge.isDueForCollectionFromIncludingAndUpToAndIncluding(installment.getFromDate(), chargesTillDate)
+                        : loanCharge.isDueForCollectionFromAndUpToAndIncluding(installment.getFromDate(), chargesTillDate);
+                if (isDue) {
                     if (loanCharge.isFeeCharge()) {
                         dueDateFeeIncome = dueDateFeeIncome.add(loanCharge.amount());
                     } else if (loanCharge.isPenaltyCharge()) {
@@ -734,6 +748,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         }
 
         postJournalEntries(loan, existingTransactionIds, existingReversedTransactionIds, false);
+        loanAccrualTransactionBusinessEventService.raiseBusinessEventForAccrualTransactions(loan, existingTransactionIds);
         recalculateAccruals(loan);
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanRefundPostBusinessEvent(newRefundTransaction));
@@ -745,8 +760,8 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     }
 
     @Override
-    public LoanTransaction foreCloseLoan(final Loan loan, final LocalDate foreClosureDate, final String noteText,
-            final ExternalId externalId, Map<String, Object> changes) {
+    public LoanTransaction foreCloseLoan(Loan loan, final LocalDate foreClosureDate, final String noteText, final ExternalId externalId,
+            Map<String, Object> changes) {
         if (loan.isChargedOff() && foreClosureDate.isBefore(loan.getChargedOffOnDate())) {
             throw new GeneralPlatformDomainRuleException("error.msg.transaction.date.cannot.be.earlier.than.charge.off.date", "Loan: "
                     + loan.getId()
@@ -784,9 +799,10 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                 loan.addLoanTransaction(accrualTransaction);
                 Set<LoanChargePaidBy> accrualCharges = accrualTransaction.getLoanChargesPaid();
                 for (LoanCharge loanCharge : loan.getActiveCharges()) {
-                    if (loanCharge.isActive() && !loanCharge.isPaid()
-                            && (loanCharge.isDueForCollectionFromAndUpToAndIncluding(fromDate, foreClosureDate)
-                                    || loanCharge.isInstalmentFee())) {
+                    boolean isDue = fromDate.isEqual(loan.getDisbursementDate())
+                            ? loanCharge.isDueForCollectionFromIncludingAndUpToAndIncluding(fromDate, foreClosureDate)
+                            : loanCharge.isDueForCollectionFromAndUpToAndIncluding(fromDate, foreClosureDate);
+                    if (loanCharge.isActive() && !loanCharge.isPaid() && (isDue || loanCharge.isInstalmentFee())) {
                         final LoanChargePaidBy loanChargePaidBy = new LoanChargePaidBy(accrualTransaction, loanCharge,
                                 loanCharge.getAmountOutstanding(currency).getAmount(), null);
                         accrualCharges.add(loanChargePaidBy);
@@ -829,14 +845,14 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         changes.put("eventAmount", payPrincipal.getAmount().negate());
 
         if (changedTransactionDetail != null) {
-            for (Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
+            for (final Map.Entry<Long, LoanTransaction> mapEntry : changedTransactionDetail.getNewTransactionMappings().entrySet()) {
+                saveLoanTransactionWithDataIntegrityViolationChecks(mapEntry.getValue());
                 updateLoanTransaction(mapEntry.getKey(), mapEntry.getValue());
             }
             // Trigger transaction replayed event
             replayedTransactionBusinessEventService.raiseTransactionReplayedEvents(changedTransactionDetail);
         }
-
-        saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
+        loan = saveAndFlushLoanWithDataIntegrityViolationChecks(loan);
 
         if (StringUtils.isNotBlank(noteText)) {
             changes.put("note", noteText);
@@ -845,6 +861,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
         }
 
         postJournalEntries(loan, existingTransactionIds, existingReversedTransactionIds, false);
+        loanAccrualTransactionBusinessEventService.raiseBusinessEventForAccrualTransactions(loan, existingTransactionIds);
         businessEventNotifierService.notifyPostBusinessEvent(new LoanBalanceChangedBusinessEvent(loan));
         businessEventNotifierService.notifyPostBusinessEvent(new LoanForeClosurePostBusinessEvent(payment));
         return payment;
@@ -868,7 +885,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
     }
 
     @Override
-    public void applyIncomeAccrualTransaction(Loan loan) {
+    public void applyFinalIncomeAccrualTransaction(Loan loan) {
         if (loan.isPeriodicAccrualAccountingEnabledOnLoanProduct()
                 // to avoid collision with processIncomeAccrualTransactionOnLoanClosure()
                 && !(loan.getLoanInterestRecalculationDetails() != null
@@ -895,7 +912,9 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
             if (total.isGreaterThanZero()) {
                 ExternalId externalId = externalIdFactory.create();
 
-                LoanTransaction accrualTransaction = LoanTransaction.accrueTransaction(loan, loan.getOffice(), loan.getClosedOnDate(),
+                LocalDate accrualTransactionDate = getFinalAccrualTransactionDate(loan);
+
+                LoanTransaction accrualTransaction = LoanTransaction.accrueTransaction(loan, loan.getOffice(), accrualTransactionDate,
                         total.getAmount(), interestPortion.getAmount(), feePortion.getAmount(), penaltyPortion.getAmount(), externalId);
 
                 Set<LoanChargePaidBy> accrualCharges = accrualTransaction.getLoanChargesPaid();
@@ -946,6 +965,7 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                 }
                 saveLoanTransactionWithDataIntegrityViolationChecks(accrualTransaction);
                 loan.addLoanTransaction(accrualTransaction);
+                businessEventNotifierService.notifyPostBusinessEvent(new LoanAccrualTransactionCreatedBusinessEvent(accrualTransaction));
 
                 loan.getRepaymentScheduleInstallments().forEach(installment -> {
                     installment.updateAccrualPortion(
@@ -955,6 +975,14 @@ public class LoanAccountDomainServiceJpa implements LoanAccountDomainService {
                 });
             }
         }
+    }
+
+    private LocalDate getFinalAccrualTransactionDate(Loan loan) {
+        return switch (loan.getStatus()) {
+            case CLOSED_OBLIGATIONS_MET -> loan.getClosedOnDate();
+            case OVERPAID -> loan.getOverpaidOnDate();
+            default -> throw new IllegalStateException("Unexpected value: " + loan.getStatus());
+        };
     }
 
 }

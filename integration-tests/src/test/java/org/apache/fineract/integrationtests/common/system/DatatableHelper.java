@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.integrationtests.common.system;
 
+import static org.apache.fineract.integrationtests.common.Utils.initializeDefaultRequestSpecification;
+import static org.apache.fineract.integrationtests.common.Utils.initializeDefaultResponseSpecification;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.gson.Gson;
@@ -52,6 +54,10 @@ public class DatatableHelper extends IntegrationTest {
     private final ResponseSpecification responseSpec;
 
     private static final String DATATABLE_URL = "/fineract-provider/api/v1/datatables";
+
+    public DatatableHelper() {
+        this(initializeDefaultRequestSpecification(), initializeDefaultResponseSpecification());
+    }
 
     public DatatableHelper(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         this.requestSpec = requestSpec;
@@ -150,6 +156,12 @@ public class DatatableHelper extends IntegrationTest {
         final String deleteEntryUrl = DATATABLE_URL + "/" + datatableName + "/" + apptableId + "?genericResultSet=true" + "&"
                 + Utils.TENANT_IDENTIFIER;
         return Utils.performServerDelete(this.requestSpec, this.responseSpec, deleteEntryUrl, jsonAttributeToGetBack);
+    }
+
+    public String runDatatableQuery(final String datatableName, final String columnFilter, final String valueFilter,
+            final String resultColumns) {
+        return Utils.performServerGet(this.requestSpec, this.responseSpec, DATATABLE_URL + "/" + datatableName + "/query" + "?columnFilter="
+                + columnFilter + "&valueFilter=" + valueFilter + "&resultColumns=" + resultColumns + "&" + Utils.TENANT_IDENTIFIER);
     }
 
     public static void verifyDatatableCreatedOnServer(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,

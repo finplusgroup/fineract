@@ -149,6 +149,14 @@
         },
         {
             "default": null,
+            "name": "externalOwnerId",
+            "type": [
+                "null",
+                "string"
+            ]
+        },
+        {
+            "default": null,
             "name": "transfer",
             "type": [
                 "null",
@@ -227,6 +235,14 @@
                     "type": "array",
                     "items": "org.apache.fineract.avro.loan.v1.UnpaidChargeDataV1"
                 }
+            ]
+        },
+        {
+            "default": null,
+            "name": "reversedOnDate",
+            "type": [
+                "null",
+                "string"
             ]
         }
     ]

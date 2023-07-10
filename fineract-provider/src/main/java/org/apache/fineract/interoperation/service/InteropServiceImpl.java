@@ -26,6 +26,8 @@ import static org.apache.fineract.portfolio.savings.SavingsAccountTransactionTyp
 import static org.apache.fineract.portfolio.savings.SavingsAccountTransactionType.WITHDRAWAL;
 import static org.apache.fineract.portfolio.savings.domain.SavingsAccountTransaction.releaseAmount;
 
+import jakarta.persistence.PersistenceException;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -36,8 +38,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
-import javax.persistence.PersistenceException;
-import javax.validation.constraints.NotNull;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.fineract.commands.domain.CommandWrapper;
@@ -539,6 +539,19 @@ public class InteropServiceImpl implements InteropService {
         final CommandWrapperBuilder builder = new CommandWrapperBuilder().withJson(apiRequestBodyAsJson);
 
         final CommandWrapper commandRequest = builder.disburseLoanApplication(loanId).build();
+        CommandProcessingResult result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
+
+        return this.toApiJsonSerializer.serialize(result);
+    }
+
+    @Override
+    public @NotNull String loanRepayment(@NotNull String accountId, String apiRequestBodyAsJson) {
+        Loan loan = validateAndGetLoan(accountId);
+        Long loanId = loan.getId();
+
+        final CommandWrapperBuilder builder = new CommandWrapperBuilder().withJson(apiRequestBodyAsJson);
+
+        final CommandWrapper commandRequest = builder.loanRepaymentTransaction(loanId).build();
         CommandProcessingResult result = this.commandsSourceWritePlatformService.logCommandSource(commandRequest);
 
         return this.toApiJsonSerializer.serialize(result);

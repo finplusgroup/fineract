@@ -18,8 +18,8 @@
  */
 package org.apache.fineract.organisation.office.service;
 
+import jakarta.persistence.PersistenceException;
 import java.util.Map;
-import javax.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
