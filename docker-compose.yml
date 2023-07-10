@@ -20,25 +20,24 @@
 version: '3.7'
 services:
   # Backend service
-  fineractpostgresql:
-    image: postgres:15.3
-    volumes:
-      - ./fineract-db/docker/postgresql:/docker-entrypoint-initdb.d/:Z,ro
-    restart: always
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: skdcnwauicn2ucnaecasdsajdnizucawencascdca
-      FINERACT_DB_USER: postgres
-      FINERACT_DB_PASS: skdcnwauicn2ucnaecasdsajdnizucawencascdca
-      FINERACT_TENANTS_DB_NAME: fineract_tenants
-      FINERACT_TENANT_DEFAULT_DB_NAME: fineract_default
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
-      test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
-      timeout: 10s
-      retries: 10
-    ports:
-      - "5432:5432"
+#  fineractpostgresql:
+#    image: postgres:15.3
+#    volumes:
+#      - ./fineract-db/docker/postgresql:/docker-entrypoint-initdb.d/:Z,ro
+#    restart: always
+#    environment:
+#      POSTGRES_USER: root
+#      POSTGRES_PASSWORD: fineract
+#      FINERACT_DB_USER: postgres
+#      FINERACT_DB_PASS: fineract
+#      FINERACT_TENANTS_DB_NAME: fineract_tenants
+#      FINERACT_TENANT_DEFAULT_DB_NAME: fineract_default
+#    healthcheck:
+#      test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
+#      timeout: 10s
+#      retries: 10
+#    ports:
+#      - "5432:5432"
   fineract-server:
     image: fineract:latest
     volumes:
@@ -49,22 +48,24 @@ services:
       retries: 10
     ports:
       - 9000:8443
-    depends_on:
-      fineractpostgresql:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+#    depends_on:
+#      fineractpostgresql:
+#        condition: service_healthy
     environment:
       # TODO: env vars prefixed with "fineract_tenants_*" will be removed with one of the next releases
       #- fineract_tenants_driver=org.postgresql.Driver
       #- fineract_tenants_url=jdbc:postgresql://fineractpostgresql:5432/fineract_tenants
       #- fineract_tenants_uid=postgres
-      #- fineract_tenants_pwd=skdcnwauicn2ucnaecasdsajdnizucawencascdca
+      #- fineract_tenants_pwd=fineract
       # NOTE: node aware scheduler
       - FINERACT_NODE_ID=1
       # NOTE: env vars prefixed "FINERACT_HIKARI_*" are used to configure the database connection pool
       - FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME=org.postgresql.Driver
-      - FINERACT_HIKARI_JDBC_URL=jdbc:postgresql://fineractpostgresql:5432/fineract_tenants
-      - FINERACT_HIKARI_USERNAME=postgres
-      - FINERACT_HIKARI_PASSWORD=skdcnwauicn2ucnaecasdsajdnizucawencascdca
+      - FINERACT_HIKARI_JDBC_URL=jdbc:postgresql://host.docker.internal:5432/fineract_tenants
+      - FINERACT_HIKARI_USERNAME=fineract
+      - FINERACT_HIKARI_PASSWORD=fineract
       # ... following variables are optional; "application.properties" contains reasonable defaults (same as here)
       - FINERACT_HIKARI_MINIMUM_IDLE=3
       - FINERACT_HIKARI_MAXIMUM_POOL_SIZE=10
@@ -85,10 +86,10 @@ services:
       - FINERACT_HIKARI_DS_PROPERTIES_LOG_SLOW_QUERIES=true
       - FINERACT_HIKARI_DS_PROPERTIES_DUMP_QUERIES_IN_EXCEPTION=true
       # NOTE: env vars prefixed "FINERACT_DEFAULT_TENANTDB_*" are used to create the default tenant database
-      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=fineractpostgresql
+      - FINERACT_DEFAULT_TENANTDB_HOSTNAME=host.docker.internal
       - FINERACT_DEFAULT_TENANTDB_PORT=5432
-      - FINERACT_DEFAULT_TENANTDB_UID=postgres
-      - FINERACT_DEFAULT_TENANTDB_PWD=skdcnwauicn2ucnaecasdsajdnizucawencascdca
+      - FINERACT_DEFAULT_TENANTDB_UID=fineract
+      - FINERACT_DEFAULT_TENANTDB_PWD=fineract
       - FINERACT_DEFAULT_TENANTDB_CONN_PARAMS=
       - FINERACT_DEFAULT_TENANTDB_TIMEZONE=Asia/Kolkata
       - FINERACT_DEFAULT_TENANTDB_IDENTIFIER=default
