@@ -841,7 +841,7 @@ public class LoanTransaction extends AbstractAuditableWithUTCDateTimeCustom {
     }
 
     public OffsetDateTime getCreatedDateTime() {
-        return (this.getCreatedDate().isPresent() ? this.getCreatedDate().get() : DateUtils.getOffsetDateTimeOfTenant());
+        return (this.getCreatedDate().isPresent() ? this.getCreatedDate().get() : DateUtils.getOffsetDateTimeOfTenantWithMostPrecision());
     }
 
     public boolean isLastTransaction(final LoanTransaction loanTransaction) {
@@ -876,7 +876,9 @@ public class LoanTransaction extends AbstractAuditableWithUTCDateTimeCustom {
         for (LoanTransactionToRepaymentScheduleMapping repaymentScheduleMapping : this.loanTransactionToRepaymentScheduleMappings) {
             if (updatedrepaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getId() != null
                     && repaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getDueDate()
-                            .equals(updatedrepaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getDueDate())) {
+                            .equals(updatedrepaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getDueDate())
+                    && updatedrepaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getId()
+                            .equals(repaymentScheduleMapping.getLoanRepaymentScheduleInstallment().getId())) {
                 repaymentScheduleMapping.setComponents(updatedrepaymentScheduleMapping.getPrincipalPortion(),
                         updatedrepaymentScheduleMapping.getInterestPortion(), updatedrepaymentScheduleMapping.getFeeChargesPortion(),
                         updatedrepaymentScheduleMapping.getPenaltyChargesPortion());

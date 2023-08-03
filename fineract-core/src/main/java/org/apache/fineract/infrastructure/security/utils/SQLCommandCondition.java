@@ -16,20 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.fineract.infrastructure.springbatch.messagehandler.conditions;
+package org.apache.fineract.infrastructure.security.utils;
 
-import org.springframework.boot.autoconfigure.condition.AllNestedConditions;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+public interface SQLCommandCondition {
 
-public class SpringEventWorkerCondition extends AllNestedConditions {
-
-    public SpringEventWorkerCondition() {
-        super(ConfigurationPhase.PARSE_CONFIGURATION);
-    }
-
-    @ConditionalOnProperty(value = "fineract.mode.batch-worker-enabled", havingValue = "true")
-    static class WorkerCondition {}
-
-    @ConditionalOnProperty(value = "fineract.remote-job-message-handler.spring-events.enabled", havingValue = "true")
-    static class SpringEventCondition {}
+    boolean checkCondition(String sql, String command);
 }

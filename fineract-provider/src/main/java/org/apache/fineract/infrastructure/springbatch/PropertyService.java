@@ -25,4 +25,10 @@ public interface PropertyService {
     Integer getChunkSize(String jobName);
 
     Integer getRetryLimit(String jobName);
+
+    Integer getThreadPoolCorePoolSize(String jobName);
+
+    Integer getThreadPoolMaxPoolSize(String jobName);
+
+    Integer getThreadPoolQueueCapacity(String jobName);
 }

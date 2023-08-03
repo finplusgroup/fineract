@@ -68,6 +68,8 @@ import org.apache.fineract.client.models.PostLoansLoanIdResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsTransactionIdRequest;
+import org.apache.fineract.client.models.PostLoansRequest;
+import org.apache.fineract.client.models.PostLoansResponse;
 import org.apache.fineract.client.models.PutChargeTransactionChangesRequest;
 import org.apache.fineract.client.models.PutChargeTransactionChangesResponse;
 import org.apache.fineract.client.models.PutLoanProductsProductIdRequest;
@@ -112,10 +114,12 @@ public class LoanTransactionHelper extends IntegrationTest {
     private static final Gson GSON = new JSON().getGson();
     private final RequestSpecification requestSpec;
     private final ResponseSpecification responseSpec;
+    private PaymentTypeHelper paymentTypeHelper;
 
     public LoanTransactionHelper(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         this.requestSpec = requestSpec;
         this.responseSpec = responseSpec;
+        this.paymentTypeHelper = new PaymentTypeHelper();
     }
 
     public GetLoanProductsProductIdResponse getLoanProduct(final Integer loanProductId) {
@@ -745,7 +749,7 @@ public class LoanTransactionHelper extends IntegrationTest {
         return ok(fineract().loanTransactions.adjustLoanTransaction(loanId, transactionId, request, "undo"));
     }
 
-    public HashMap makeRepaymentWithPDC(final String date, final Float amountToBePaid, final Integer loanID, final Integer paymentType) {
+    public HashMap makeRepaymentWithPDC(final String date, final Float amountToBePaid, final Integer loanID, final Long paymentType) {
         return (HashMap) performLoanTransaction(createLoanTransactionURL(MAKE_REPAYMENT_COMMAND, loanID),
                 getRepaymentWithPDCBodyAsJSON(date, amountToBePaid, paymentType), "");
     }
@@ -786,6 +790,10 @@ public class LoanTransactionHelper extends IntegrationTest {
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
         final HashMap response = Utils.performServerPost(requestSpec, responseSpecParam, ADD_CHARGES_URL, request, "");
         return (Integer) response.get("resourceId");
+    }
+
+    public PostLoansLoanIdChargesResponse addChargesForLoan(final Long loanId, PostLoansLoanIdChargesRequest request) {
+        return ok(fineract().loanCharges.executeLoanCharge(loanId, request, null));
     }
 
     public PostLoansLoanIdChargesResponse addChargeForLoan(final Integer loanId, final String payload,
@@ -1123,7 +1131,7 @@ public class LoanTransactionHelper extends IntegrationTest {
         return new Gson().toJson(map);
     }
 
-    private String getRepaymentWithPDCBodyAsJSON(final String transactionDate, final Float transactionAmount, final Integer paymentTypeId) {
+    private String getRepaymentWithPDCBodyAsJSON(final String transactionDate, final Float transactionAmount, final Long paymentTypeId) {
         final HashMap<String, String> map = new HashMap<>();
         map.put("locale", "en");
         map.put("paymentTypeId", paymentTypeId.toString());
@@ -1193,6 +1201,17 @@ public class LoanTransactionHelper extends IntegrationTest {
         if (externalId != null) {
             map.put("externalId", externalId);
         }
+        String json = new Gson().toJson(map);
+        log.info("{}", json);
+        return json;
+    }
+
+    public static String getSpecifiedInstallmentChargesForLoanAsJSON(final String chargeId, final String amount) {
+        final HashMap<String, String> map = new HashMap<>();
+        map.put("locale", "en_GB");
+        map.put("dateFormat", "dd MMMM yyyy");
+        map.put("amount", amount);
+        map.put("chargeId", chargeId);
         String json = new Gson().toJson(map);
         log.info("{}", json);
         return json;
@@ -1692,7 +1711,7 @@ public class LoanTransactionHelper extends IntegrationTest {
 
     public Long applyChargebackTransaction(final Integer loanId, final Long transactionId, final String amount,
             final Integer paymentTypeIdx, ResponseSpecification responseSpec) {
-        List<GetPaymentTypesResponse> paymentTypeList = PaymentTypeHelper.getSystemPaymentType(this.requestSpec, this.responseSpec);
+        List<GetPaymentTypesResponse> paymentTypeList = paymentTypeHelper.getAllPaymentTypes(false);
         assertTrue(!paymentTypeList.isEmpty());
 
         final String payload = createChargebackPayload(amount, paymentTypeList.get(paymentTypeIdx).getId());
@@ -1722,7 +1741,7 @@ public class LoanTransactionHelper extends IntegrationTest {
         }
     }
 
-    private String createChargebackPayload(final String transactionAmount, final Integer paymentTypeId) {
+    private String createChargebackPayload(final String transactionAmount, final Long paymentTypeId) {
         final HashMap<String, Object> map = new HashMap<>();
         map.put("transactionAmount", transactionAmount);
         map.put("paymentTypeId", paymentTypeId);
@@ -1750,8 +1769,16 @@ public class LoanTransactionHelper extends IntegrationTest {
         return ok(fineract().loans.getDelinquencyTagHistory1(loanExternalId));
     }
 
+    public PostLoansResponse applyLoan(PostLoansRequest request) {
+        return ok(fineract().loans.calculateLoanScheduleOrSubmitLoanApplication(request, null));
+    }
+
     public PostLoansLoanIdResponse approveLoan(String loanExternalId, PostLoansLoanIdRequest request) {
         return ok(fineract().loans.stateTransitions1(loanExternalId, request, "approve"));
+    }
+
+    public PostLoansLoanIdResponse approveLoan(Long loanId, PostLoansLoanIdRequest request) {
+        return ok(fineract().loans.stateTransitions(loanId, request, "approve"));
     }
 
     public PostLoansLoanIdResponse rejectLoan(String loanExternalId, PostLoansLoanIdRequest request) {

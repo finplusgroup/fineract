@@ -493,8 +493,8 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
                 AppUser user = context.authenticatedUser();
                 jdbcTemplate.update(transactionSql, loanId, loan.getOfficeId(), externalIdFactory.create().getValue(),
                         LoanTransactionType.ACCRUAL.getValue(), actualDisbursementDate, loanCharge.amount(), loanCharge.amount(),
-                        DateUtils.getBusinessLocalDate(), user.getId(), user.getId(), DateUtils.getOffsetDateTimeOfTenant(),
-                        DateUtils.getOffsetDateTimeOfTenant());
+                        DateUtils.getBusinessLocalDate(), user.getId(), user.getId(),
+                        DateUtils.getOffsetDateTimeOfTenantWithMostPrecision(), DateUtils.getOffsetDateTimeOfTenantWithMostPrecision());
             }
         }
 
@@ -2749,10 +2749,7 @@ public class LoanWritePlatformServiceJpaRepositoryImpl implements LoanWritePlatf
             throw new GeneralPlatformDomainRuleException("error.msg.loan.transaction.cannot.be.a.future.date", errorMessage,
                     transactionDate);
         }
-        if (loan.isInterestBearing()) {
-            throw new GeneralPlatformDomainRuleException("error.msg.loan.is.interest.bearing",
-                    "Loan: " + loanId + " Charge-off is not allowed. Loan Account is interest bearing", loanId);
-        }
+
         businessEventNotifierService.notifyPreBusinessEvent(new LoanChargeOffPreBusinessEvent(loan));
 
         if (command.hasParameter(LoanApiConstants.chargeOffReasonIdParamName)) {

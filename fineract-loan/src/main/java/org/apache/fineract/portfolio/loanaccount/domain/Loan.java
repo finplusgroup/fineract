@@ -345,7 +345,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "loan", orphanRemoval = true, fetch = FetchType.LAZY)
     private List<LoanRepaymentScheduleInstallment> repaymentScheduleInstallments = new ArrayList<>();
 
-    @OrderBy(value = "dateOf, id")
+    @OrderBy(value = "dateOf, createdDate, id")
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "loan", orphanRemoval = true, fetch = FetchType.LAZY)
     private List<LoanTransaction> loanTransactions = new ArrayList<>();
 
@@ -1081,7 +1081,12 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
                 transactionDate = loanCharge.getDueLocalDate();
             }
         } else if (loanCharge.isInstalmentFee()) {
-            transactionDate = loanCharge.getInstallmentLoanCharge(loanInstallmentNumber).getRepaymentInstallment().getDueDate();
+            LocalDate repaymentDueDate = loanCharge.getInstallmentLoanCharge(loanInstallmentNumber).getRepaymentInstallment().getDueDate();
+            if (repaymentDueDate.isAfter(DateUtils.getBusinessLocalDate())) {
+                transactionDate = DateUtils.getBusinessLocalDate();
+            } else {
+                transactionDate = repaymentDueDate;
+            }
         }
 
         scheduleGeneratorDTO.setRecalculateFrom(transactionDate);
@@ -3475,7 +3480,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
     private void processIncomeAccrualTransactionOnLoanClosure() {
         if (this.loanInterestRecalculationDetails != null && this.loanInterestRecalculationDetails.isCompoundingToBePostedAsTransaction()
-                && this.getStatus().isClosedObligationsMet()) {
+                && this.getStatus().isClosedObligationsMet() && !isNpa() && !isChargedOff()) {
 
             ExternalId externalId = ExternalId.empty();
             boolean isExternalIdAutoGenerationEnabled = TemporaryConfigurationServiceContainer.isExternalIdAutoGenerationEnabled();
@@ -5747,7 +5752,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
 
     private LoanScheduleDTO getRecalculatedSchedule(final ScheduleGeneratorDTO generatorDTO) {
 
-        if (!this.repaymentScheduleDetail().isInterestRecalculationEnabled() || isNpa) {
+        if (!this.repaymentScheduleDetail().isInterestRecalculationEnabled() || isNpa || isChargedOff()) {
             return null;
         }
         final InterestMethod interestMethod = this.loanRepaymentScheduleDetail.getInterestMethod();
@@ -7124,7 +7129,7 @@ public class Loan extends AbstractAuditableWithUTCDateTimeCustom {
     }
 
     public void handleMaturityDateActivate() {
-        if (this.expectedMaturityDate != null && this.actualMaturityDate == null) {
+        if (this.expectedMaturityDate != null && !this.expectedMaturityDate.equals(this.actualMaturityDate)) {
             this.actualMaturityDate = this.expectedMaturityDate;
         }
     }

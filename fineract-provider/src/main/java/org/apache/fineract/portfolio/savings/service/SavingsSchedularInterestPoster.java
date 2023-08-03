@@ -120,8 +120,8 @@ public class SavingsSchedularInterestPoster {
                                     savingsAccountTransactionData.getId(), null, false, null, false,
                                     savingsAccountTransactionData.getTransactionDate(), JournalEntryType.CREDIT.getValue().longValue(),
                                     savingsAccountTransactionData.getAmount(), null, JournalEntryType.CREDIT.getValue().longValue(),
-                                    savingsAccountData.getId(), DateUtils.getOffsetDateTimeOfTenant(),
-                                    DateUtils.getOffsetDateTimeOfTenant(), false, BigDecimal.ZERO, BigDecimal.ZERO, null,
+                                    savingsAccountData.getId(), DateUtils.getOffsetDateTimeOfTenantWithMostPrecision(),
+                                    DateUtils.getOffsetDateTimeOfTenantWithMostPrecision(), false, BigDecimal.ZERO, BigDecimal.ZERO, null,
                                     savingsAccountTransactionData.getTransactionDate(), null, userId, userId,
                                     DateUtils.getBusinessLocalDate() });
 
@@ -131,8 +131,8 @@ public class SavingsSchedularInterestPoster {
                                     savingsAccountTransactionData.getId(), null, false, null, false,
                                     savingsAccountTransactionData.getTransactionDate(), JournalEntryType.DEBIT.getValue().longValue(),
                                     savingsAccountTransactionData.getAmount(), null, JournalEntryType.DEBIT.getValue().longValue(),
-                                    savingsAccountData.getId(), DateUtils.getOffsetDateTimeOfTenant(),
-                                    DateUtils.getOffsetDateTimeOfTenant(), false, BigDecimal.ZERO, BigDecimal.ZERO, null,
+                                    savingsAccountData.getId(), DateUtils.getOffsetDateTimeOfTenantWithMostPrecision(),
+                                    DateUtils.getOffsetDateTimeOfTenantWithMostPrecision(), false, BigDecimal.ZERO, BigDecimal.ZERO, null,
                                     savingsAccountTransactionData.getTransactionDate(), null, userId, userId,
                                     DateUtils.getBusinessLocalDate() });
                         }
@@ -206,7 +206,8 @@ public class SavingsSchedularInterestPoster {
                             savingsAccountTransactionData.getBalanceNumberOfDays(), savingsAccountTransactionData.getRunningBalance(),
                             savingsAccountTransactionData.getCumulativeBalance(), currentDate, Integer.valueOf(1),
                             savingsAccountTransactionData.isManualTransaction(), savingsAccountTransactionData.getRefNo(),
-                            savingsAccountTransactionData.isReversalTransaction(), savingsAccountTransactionData.getOverdraftAmount(), });
+                            savingsAccountTransactionData.isReversalTransaction(), savingsAccountTransactionData.getOverdraftAmount(),
+                            DateUtils.getBusinessLocalDate() });
                 } else {
                     paramsForTransactionUpdate.add(new Object[] { savingsAccountTransactionData.isReversed(),
                             savingsAccountTransactionData.getAmount(), savingsAccountTransactionData.getOverdraftAmount(), balanceEndDate,
@@ -244,8 +245,8 @@ public class SavingsSchedularInterestPoster {
         query.append("transaction_type_enum, transaction_date, amount, balance_end_date_derived, ");
         query.append("balance_number_of_days_derived, running_balance_derived, cumulative_balance_derived, ");
         query.append("created_date, appuser_id, is_manual, ref_no, is_reversal, ");
-        query.append("overdraft_amount_derived) VALUES ");
-        query.append("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        query.append("overdraft_amount_derived, submitted_on_date) VALUES ");
+        query.append("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         return query.toString();
 
     }
